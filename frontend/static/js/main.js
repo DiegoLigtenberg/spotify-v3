@@ -1,12 +1,16 @@
 import AudioPlayer from './modules/AudioPlayer.js';
 import SongListManager from './modules/SongListManager.js';
 import UIManager from './modules/UIManager.js';
+import PlaylistManager from './modules/PlaylistManager.js';
 
 class MusicPlayer {
     constructor() {
         this.currentSong = null;
         this.currentSongIndex = -1;
         this.seekInProgress = false;
+        this.shuffleEnabled = false;
+        
+        console.log('Initializing MusicPlayer components...');
         
         this.audioPlayer = new AudioPlayer();
         this.uiManager = new UIManager();
@@ -20,7 +24,16 @@ class MusicPlayer {
                 cooldownTime: 250
             }
         );
-
+        
+        // Initialize playlist manager
+        try {
+            this.playlistManager = new PlaylistManager();
+            console.log('PlaylistManager initialized successfully');
+        } catch (error) {
+            console.error('Error initializing PlaylistManager:', error);
+            this.uiManager.showNotification('Error loading playlists. Some features may not work correctly.', 'error');
+        }
+        
         this.setupEventListeners();
         this.initializeApplication();
     }
@@ -36,7 +49,9 @@ class MusicPlayer {
         });
 
         this.audioPlayer.addEventListener('ended', () => {
-            if (this.currentSongIndex < this.songListManager.songs.length - 1) {
+            if (this.shuffleEnabled) {
+                this.playRandomSong();
+            } else if (this.currentSongIndex < this.songListManager.songs.length - 1) {
                 this.playSong(this.songListManager.songs[this.currentSongIndex + 1]);
             }
         });
@@ -119,6 +134,21 @@ class MusicPlayer {
         // Add repeat toggle handler
         this.uiManager.onRepeatToggle = () => this.toggleRepeat();
         
+        // Add shuffle toggle handler
+        this.uiManager.onShuffleToggle = () => this.toggleShuffle();
+        
+        // Add like toggle handler
+        this.uiManager.onLikeToggle = () => {
+            console.log('Like button clicked in UI');
+            this.toggleLike();
+        };
+        
+        // Add view change handler
+        this.uiManager.onViewChange = (view) => {
+            console.log('Changing view to:', view);
+            this.changeView(view);
+        };
+        
         this.uiManager.onProgressClick = (position) => {
             if (!this.currentSong || !this.audioPlayer.duration) return;
             
@@ -165,7 +195,20 @@ class MusicPlayer {
 
     displaySongs(songs) {
         const container = document.querySelector('.songs-container');
+        if (!container) {
+            console.error('Songs container element not found');
+            return;
+        }
+        
         container.innerHTML = '';
+        
+        if (songs.length === 0) {
+            const emptyMessage = document.createElement('div');
+            emptyMessage.className = 'empty-songs-message';
+            emptyMessage.textContent = 'No songs found';
+            container.appendChild(emptyMessage);
+            return;
+        }
         
         songs.forEach(song => {
             const songElement = this.uiManager.createSongElement(
@@ -184,6 +227,8 @@ class MusicPlayer {
                 return;
             }
             
+            console.log('Playing song:', song.title);
+            
             // Store current song and index for potential retries
             this.currentSong = song;
             this.currentSongIndex = this.songListManager.songs.findIndex(s => s.id === song.id);
@@ -192,20 +237,26 @@ class MusicPlayer {
             this.uiManager.updateCurrentSong(song);
             this.uiManager.showNotification('Loading song...', 'info');
             
-            // Build the URL for streaming the song
-            const originalUrl = `/api/stream/${song.id}`;
+            // Check if song is liked and update heart icon
+            this.updateLikeStatus(song.id);
+            
+            // Build the URL for streaming the song - with fallback options
+            const streamEndpoints = [
+                `/api/stream/${song.id}`,
+                `/static/audio/${song.id}.mp3`,
+                `/static/audio/sample.mp3` // Fallback to a default sample if needed
+            ];
+            
             let attempts = 0;
-            const maxAttempts = 2;
+            const maxAttempts = streamEndpoints.length;
             let success = false;
+            let lastError = null;
             
             while (attempts < maxAttempts && !success) {
                 try {
                     attempts++;
                     
-                    // Add random parameter to avoid caching if this is a retry
-                    const songUrl = attempts > 1 
-                        ? `${originalUrl}?retry=${Date.now()}` 
-                        : originalUrl;
+                    const songUrl = streamEndpoints[attempts - 1] + (attempts > 1 ? `?retry=${Date.now()}` : '');
                         
                     console.log(`Playing song: ${song.title} (attempt ${attempts}/${maxAttempts}) from ${songUrl}`);
                     
@@ -214,7 +265,7 @@ class MusicPlayer {
                     
                     // Use Promise.race to implement a timeout
                     const timeoutPromise = new Promise((_, reject) => {
-                        setTimeout(() => reject(new Error('Playback timed out')), 20000);
+                        setTimeout(() => reject(new Error('Playback timed out')), 10000);
                     });
                     
                     await Promise.race([playPromise, timeoutPromise]);
@@ -231,7 +282,8 @@ class MusicPlayer {
                     }
                     
                 } catch (error) {
-                    console.error(`Attempt ${attempts} failed:`, error);
+                    console.error(`Attempt ${attempts} with URL ${streamEndpoints[attempts - 1]} failed:`, error);
+                    lastError = error;
                     
                     if (attempts >= maxAttempts) {
                         // We've exhausted our retries
@@ -239,11 +291,11 @@ class MusicPlayer {
                             `Failed to play song after ${maxAttempts} attempts. Please try again later.`, 
                             'error'
                         );
-                        throw error;
+                        throw lastError;
                     } else {
-                        // Retry with slightly different parameters
+                        // Retry with different endpoint
                         this.uiManager.showNotification(
-                            `Playback failed. Retrying... (${attempts}/${maxAttempts})`, 
+                            `Playback failed. Trying alternate source... (${attempts}/${maxAttempts})`, 
                             'warning'
                         );
                         // Add a short delay before retry
@@ -296,20 +348,141 @@ class MusicPlayer {
         this.uiManager.updateCurrentSong(song);
         this.uiManager.updatePlayPauseButton(true);
         
+        // Set the initial like state using our new method
+        if (this.playlistManager) {
+            this.playlistManager.setInitialLikeState(
+                song.id, 
+                song.title, 
+                song.artist
+            );
+        } else {
+            // Fallback to the old method if playlistManager is not available
+            this.updateLikeStatus(song.id);
+        }
+        
+        // Update the document title
+        document.title = `${song.title} - ${song.artist || 'Unknown Artist'}`;
+        
         // Load songs around current song for better UX
         this.songListManager.loadSongsAroundIndex(this.currentSongIndex)
             .catch(err => console.error('Error loading songs around current index:', err));
     }
 
-    // Add a method to toggle repeat mode
+    // Toggle repeat mode
     toggleRepeat() {
         const isRepeatEnabled = this.audioPlayer.toggleRepeat();
         console.log(`Repeat mode ${isRepeatEnabled ? 'enabled' : 'disabled'}`);
         // UI is updated via the repeatChanged event
     }
+    
+    // Toggle shuffle mode
+    toggleShuffle() {
+        this.shuffleEnabled = !this.shuffleEnabled;
+        console.log(`Shuffle mode ${this.shuffleEnabled ? 'enabled' : 'disabled'}`);
+        this.uiManager.updateShuffleButton(this.shuffleEnabled);
+    }
+    
+    // Toggle like status
+    toggleLike() {
+        if (!this.currentSong) {
+            this.uiManager.showNotification('No song is currently playing', 'info');
+            return;
+        }
+        
+        console.log('Toggling like status for current song:', this.currentSong.title);
+        
+        // Call the playlistManager's toggleLike method if available
+        if (this.playlistManager) {
+            try {
+                this.playlistManager.toggleLike();
+                
+                // Update UI after toggle
+                setTimeout(() => {
+                    // Check if the song is now liked
+                    this.updateLikeStatus(this.currentSong.id);
+                }, 100); // Small delay to allow toggle to complete
+            } catch (error) {
+                console.error('Error toggling like status:', error);
+                this.uiManager.showNotification('Error updating like status', 'error');
+            }
+        } else {
+            console.error('PlaylistManager not available');
+            this.uiManager.showNotification('Unable to like song: playlist manager not initialized', 'error');
+        }
+    }
+    
+    // Update like button based on current song
+    updateLikeStatus(songId) {
+        if (!this.playlistManager) {
+            console.warn('Cannot update like status: PlaylistManager not available');
+            return;
+        }
+        
+        if (!this.currentSong) {
+            console.warn('Cannot update like status: No current song');
+            return;
+        }
+        
+        try {
+            // Check if we have a UI manager to update
+            if (!this.uiManager) return;
+            
+            console.log('Checking if song is liked:', {
+                title: this.currentSong.title,
+                artist: this.currentSong.artist,
+                id: songId
+            });
+            
+            // Let's directly check the actual UI state of the like button
+            const likeButton = document.getElementById('like-current-song');
+            const isLiked = likeButton ? likeButton.classList.contains('liked') : false;
+            
+            console.log('Current like button state:', isLiked);
+            
+            // Update our UI
+            this.uiManager.updateLikeButton(isLiked);
+        } catch (error) {
+            console.error('Error updating like status:', error);
+        }
+    }
+    
+    // Change the current view
+    changeView(view) {
+        console.log('Changing to view:', view);
+        this.uiManager.showView(view);
+    }
+
+    // Play a random song (for shuffle mode)
+    playRandomSong() {
+        const availableSongs = this.songListManager.songs;
+        if (availableSongs.length === 0) return;
+        
+        // Don't play the current song again
+        const filteredSongs = availableSongs.filter(song => 
+            !this.currentSong || song.id !== this.currentSong.id
+        );
+        
+        if (filteredSongs.length === 0) {
+            // If there's only one song, play it again
+            this.playSong(this.currentSong);
+            return;
+        }
+        
+        // Pick a random song
+        const randomIndex = Math.floor(Math.random() * filteredSongs.length);
+        const randomSong = filteredSongs[randomIndex];
+        
+        this.playSong(randomSong);
+    }
 }
 
 // Initialize the application when the DOM is loaded
 document.addEventListener('DOMContentLoaded', () => {
-    new MusicPlayer();
+    console.log('DOM loaded, initializing MusicPlayer...');
+    try {
+        window.musicPlayer = new MusicPlayer();
+    } catch (error) {
+        console.error('Error initializing music player:', error);
+        alert('Error initializing the music player. Please refresh the page.');
+    }
 }); 

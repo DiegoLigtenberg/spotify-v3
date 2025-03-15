@@ -5,6 +5,9 @@ class AudioPlayer {
         this.audioElement.id = 'main-audio-player';
         this.audioElement.preload = 'auto';
         this.audioElement.crossOrigin = 'anonymous'; // Enable CORS
+        this.audioElement.playsInline = true; // Required for iOS
+        this.audioElement.setAttribute('playsinline', ''); // Double ensure iOS compatibility
+        this.audioElement.setAttribute('webkit-playsinline', ''); // For older iOS versions
         
         // Add to DOM but hide it
         this.audioElement.style.display = 'none';
@@ -19,6 +22,15 @@ class AudioPlayer {
         this.pendingSeek = false;
         this.seekAttempts = 0;
         this.isRepeatEnabled = false;
+        this.isMobile = this._detectMobileDevice();
+        this.isIOS = this._isIOSDevice();
+        this.hasUserInteraction = false; // Track if user has interacted with the page
+        
+        // Create iOS-specific play button if needed
+        if (this.isIOS) {
+            this._createIOSPlayButton();
+            this._setupIOSPlayback();
+        }
         
         this.eventListeners = {
             timeupdate: [],
@@ -36,6 +48,10 @@ class AudioPlayer {
         // Set up progress bar click handling
         this.progressContainer?.addEventListener('click', (e) => {
             if (!this.isLoaded) return;
+            
+            // Mark that we have user interaction
+            this.hasUserInteraction = true;
+            
             const rect = this.progressContainer.getBoundingClientRect();
             const percent = (e.clientX - rect.left) / rect.width;
             const duration = this.duration;
@@ -44,8 +60,97 @@ class AudioPlayer {
             }
         });
 
+        // Track user interaction for iOS
+        document.addEventListener('touchstart', () => {
+            this.hasUserInteraction = true;
+            
+            // Hide the iOS play button if it's visible
+            const iosPlayButton = document.querySelector('.ios-play-button');
+            if (iosPlayButton && iosPlayButton.style.display !== 'none') {
+                // Don't hide immediately as the touch might be intended for that button
+                setTimeout(() => {
+                    if (!this.isPlaying) {
+                        iosPlayButton.style.display = 'block';
+                    } else {
+                        iosPlayButton.style.display = 'none';
+                    }
+                }, 300);
+            }
+        }, { once: false, passive: true });
+
         // Debug the server's range request support
         this._checkRangeSupport();
+    }
+    
+    _detectMobileDevice() {
+        return /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent);
+    }
+    
+    _isIOSDevice() {
+        return /iPad|iPhone|iPod/.test(navigator.userAgent) || 
+               (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1);
+    }
+    
+    _createIOSPlayButton() {
+        // Check if the button already exists
+        if (document.querySelector('.ios-play-button')) return;
+        
+        const iosPlayButton = document.createElement('button');
+        iosPlayButton.className = 'ios-play-button';
+        iosPlayButton.textContent = 'Tap to Enable Audio';
+        iosPlayButton.style.display = 'none';
+        
+        document.body.appendChild(iosPlayButton);
+    }
+    
+    _setupIOSPlayback() {
+        const iosPlayButton = document.querySelector('.ios-play-button');
+        if (!iosPlayButton) return;
+        
+        iosPlayButton.addEventListener('click', async () => {
+            // Play a silent audio to unlock audio
+            try {
+                this.hasUserInteraction = true;
+                
+                // Try to unlock audio by playing a silent sound
+                await this._unlockAudioContext();
+                
+                // Hide the button
+                iosPlayButton.style.display = 'none';
+                
+                // If we have a current song, try to play it
+                if (this.currentUrl) {
+                    this.resume().catch(error => {
+                        console.error('Error resuming after iOS button click:', error);
+                    });
+                }
+            } catch (error) {
+                console.error('Error handling iOS play button click:', error);
+            }
+        });
+    }
+    
+    async _unlockAudioContext() {
+        // Create a short silent sound to unlock audio playback
+        try {
+            const silentAudio = new Audio();
+            silentAudio.src = 'data:audio/mp3;base64,SUQzBAAAAAAAI1RTU0UAAAAPAAADTGF2ZjU4LjI5LjEwMAAAAAAAAAAAAAAA//tQAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAWGluZwAAAA8AAAACAAABIgD/////////////////////////////////////AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA';
+            silentAudio.setAttribute('preload', 'auto');
+            silentAudio.load();
+            await silentAudio.play();
+            
+            // Safari requires a user-initiated play call on the actual element we'll use
+            await this.audioElement.play();
+            
+            // Immediately pause to avoid playing silence
+            this.audioElement.pause();
+            
+            console.log('Audio playback unlocked for iOS');
+            return true;
+        } catch (err) {
+            console.error('Failed to unlock audio playback:', err);
+            throw err;
+        }
     }
     
     async _checkRangeSupport() {
@@ -475,6 +580,13 @@ class AudioPlayer {
             newAudio.preload = 'auto';
             newAudio.crossOrigin = 'anonymous';
             
+            // Add mobile-specific attributes
+            if (this.isMobile) {
+                newAudio.playsInline = true;
+                newAudio.setAttribute('playsinline', '');
+                newAudio.setAttribute('webkit-playsinline', '');
+            }
+            
             // Copy our event listeners
             const events = ['timeupdate', 'play', 'pause', 'ended', 'loadedmetadata', 'canplay', 'error', 'seeked', 'seeking'];
             events.forEach(event => {
@@ -491,6 +603,27 @@ class AudioPlayer {
                     : 'Unknown error';
                 console.error(`Alternative audio loading error: ${errorInfo}`, e);
                 
+                // Check if it's a mobile autoplay restriction
+                if (this.isMobile && newAudio.error && newAudio.error.code === 9) {
+                    console.log('Mobile autoplay restriction detected');
+                    
+                    // Show iOS play button if on iOS
+                    if (this.isIOS) {
+                        const iosPlayButton = document.querySelector('.ios-play-button');
+                        if (iosPlayButton) {
+                            iosPlayButton.style.display = 'block';
+                        }
+                    }
+                    
+                    // Mark as loaded but not playing
+                    this.isLoaded = true;
+                    this.isPlaying = false;
+                    
+                    // Resolve without error for expected behavior
+                    resolve();
+                    return;
+                }
+                
                 // Report the error
                 this._triggerEvent('error', { 
                     error: new Error(`Failed to load audio: ${errorInfo}`)
@@ -505,7 +638,23 @@ class AudioPlayer {
                 const modifiedUrl = `${url}&altmethod=true`;
                 console.log('Alternative method using URL:', modifiedUrl);
                 
-                newAudio.src = modifiedUrl;
+                // For mobile devices, especially iOS, provide multiple formats
+                if (this.isMobile) {
+                    // Create source elements for different formats
+                    const mp3Source = document.createElement('source');
+                    mp3Source.src = `${modifiedUrl}&format=mp3`;
+                    mp3Source.type = 'audio/mpeg';
+                    newAudio.appendChild(mp3Source);
+                    
+                    // Add AAC source for iOS
+                    const aacSource = document.createElement('source');
+                    aacSource.src = `${modifiedUrl}&format=aac`;
+                    aacSource.type = 'audio/aac';
+                    newAudio.appendChild(aacSource);
+                } else {
+                    // For desktop, just set the src directly
+                    newAudio.src = modifiedUrl;
+                }
                 
                 // Set up handling for metadata loading success
                 newAudio.onloadedmetadata = () => {
@@ -513,12 +662,44 @@ class AudioPlayer {
                         this.formatTime(newAudio.duration));
                     this.isLoaded = true;
                     
+                    // Check for iOS restrictions
+                    if (this.isIOS && !this.hasUserInteraction && forceTryPlay) {
+                        console.log('iOS detected, showing play button instead of auto-playing');
+                        const iosPlayButton = document.querySelector('.ios-play-button');
+                        if (iosPlayButton) {
+                            iosPlayButton.style.display = 'block';
+                        }
+                        resolve();
+                        return;
+                    }
+                    
                     if (forceTryPlay && !this.isPlaying) {
                         console.log('Force playing with alternative audio element');
                         newAudio.play().then(() => {
                             this.isPlaying = true;
                             resolve();
                         }).catch(e => {
+                            // Handle NotAllowedError specially for mobile
+                            if (this.isMobile && e.name === 'NotAllowedError') {
+                                console.log('Mobile autoplay restriction in play()');
+                                
+                                // Show iOS play button if on iOS
+                                if (this.isIOS) {
+                                    const iosPlayButton = document.querySelector('.ios-play-button');
+                                    if (iosPlayButton) {
+                                        iosPlayButton.style.display = 'block';
+                                    }
+                                }
+                                
+                                // Mark as loaded but not playing
+                                this.isLoaded = true;
+                                this.isPlaying = false;
+                                
+                                // Resolve without error for expected behavior
+                                resolve();
+                                return;
+                            }
+                            
                             console.error('Failed to play with alternative method:', e);
                             this._triggerEvent('error', { error: e });
                             reject(e);
@@ -534,11 +715,43 @@ class AudioPlayer {
                         console.log('Can play event in alternative audio (metadata never loaded)');
                         this.isLoaded = true;
                         
+                        // Check for iOS restrictions
+                        if (this.isIOS && !this.hasUserInteraction && forceTryPlay) {
+                            console.log('iOS detected on canplay, showing play button instead of auto-playing');
+                            const iosPlayButton = document.querySelector('.ios-play-button');
+                            if (iosPlayButton) {
+                                iosPlayButton.style.display = 'block';
+                            }
+                            resolve();
+                            return;
+                        }
+                        
                         if (forceTryPlay && !this.isPlaying) {
                             newAudio.play().then(() => {
                                 this.isPlaying = true;
                                 resolve();
                             }).catch(e => {
+                                // Handle NotAllowedError specially for mobile
+                                if (this.isMobile && e.name === 'NotAllowedError') {
+                                    console.log('Mobile autoplay restriction in canplay handler');
+                                    
+                                    // Show iOS play button if on iOS
+                                    if (this.isIOS) {
+                                        const iosPlayButton = document.querySelector('.ios-play-button');
+                                        if (iosPlayButton) {
+                                            iosPlayButton.style.display = 'block';
+                                        }
+                                    }
+                                    
+                                    // Mark as loaded but not playing
+                                    this.isLoaded = true;
+                                    this.isPlaying = false;
+                                    
+                                    // Resolve without error for expected behavior
+                                    resolve();
+                                    return;
+                                }
+                                
                                 console.error('Failed to play on canplay event:', e);
                                 reject(e);
                             });
@@ -564,12 +777,44 @@ class AudioPlayer {
                             console.log('Metadata/canplay events never fired, forcing continue');
                             this.isLoaded = true;
                             
+                            // Check for iOS restrictions for the timeout case
+                            if (this.isIOS && !this.hasUserInteraction && forceTryPlay) {
+                                console.log('iOS detected in timeout, showing play button');
+                                const iosPlayButton = document.querySelector('.ios-play-button');
+                                if (iosPlayButton) {
+                                    iosPlayButton.style.display = 'block';
+                                }
+                                resolve();
+                                return;
+                            }
+                            
                             if (forceTryPlay && !this.isPlaying) {
                                 console.log('Last-resort playback attempt');
                                 this.audioElement.play().then(() => {
                                     this.isPlaying = true;
                                     resolve();
                                 }).catch(e => {
+                                    // Final attempt mobile handling
+                                    if (this.isMobile && e.name === 'NotAllowedError') {
+                                        console.log('Mobile autoplay restriction in timeout handler');
+                                        
+                                        // Show iOS play button if on iOS
+                                        if (this.isIOS) {
+                                            const iosPlayButton = document.querySelector('.ios-play-button');
+                                            if (iosPlayButton) {
+                                                iosPlayButton.style.display = 'block';
+                                            }
+                                        }
+                                        
+                                        // Mark as loaded but not playing
+                                        this.isLoaded = true;
+                                        this.isPlaying = false;
+                                        
+                                        // Resolve without error
+                                        resolve();
+                                        return;
+                                    }
+                                    
                                     console.error('Final playback attempt failed:', e);
                                     reject(e);
                                 });

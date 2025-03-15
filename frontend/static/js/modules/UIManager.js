@@ -2,7 +2,7 @@ class UIManager {
     constructor() {
         this.elements = {
             playPauseButton: document.getElementById('play-pause'),
-            previousButton: document.getElementById('previous'),
+            previousButton: document.getElementById('prev') || document.getElementById('previous'),
             nextButton: document.getElementById('next'),
             progressBar: document.querySelector('.progress-bar'),
             progress: document.querySelector('.progress'),
@@ -14,7 +14,11 @@ class UIManager {
             currentThumbnail: document.getElementById('current-thumbnail'),
             volumeControl: document.querySelector('.volume-slider'),
             volumeProgress: document.querySelector('.volume-progress'),
-            repeatButton: document.getElementById('repeat-button') || this._createRepeatButton()
+            repeatButton: document.getElementById('repeat') || document.getElementById('repeat-button'),
+            likeButton: document.getElementById('like-current-song'),
+            shuffleButton: document.getElementById('shuffle'),
+            sidebarLinks: document.querySelectorAll('.sidebar-nav-item'),
+            viewContainers: document.querySelectorAll('.view-container')
         };
 
         // Initialize event handlers
@@ -25,6 +29,9 @@ class UIManager {
         this.onVolumeChange = null;
         this.onSearch = null;
         this.onRepeatToggle = null;
+        this.onShuffleToggle = null;
+        this.onLikeToggle = null;
+        this.onViewChange = null;
 
         this.isDragging = false;
         this.pendingSeek = false;
@@ -33,64 +40,72 @@ class UIManager {
         this.setupEventListeners();
     }
 
-    _createRepeatButton() {
-        // Create repeat button if it doesn't exist in the DOM
-        const repeatButton = document.createElement('button');
-        repeatButton.id = 'repeat-button';
-        repeatButton.className = 'control-button';
-        repeatButton.innerHTML = '<i class="fas fa-redo"></i>';
-        
-        // Insert it in the playback controls
-        const playbackControls = document.querySelector('.playback-controls');
-        if (playbackControls) {
-            playbackControls.appendChild(repeatButton);
-        }
-        
-        return repeatButton;
-    }
-
     setupEventListeners() {
         // Button click handlers
-        this.elements.playPauseButton.addEventListener('click', () => {
-            if (this.onPlayPauseClick) this.onPlayPauseClick();
-        });
+        if (this.elements.playPauseButton) {
+            this.elements.playPauseButton.addEventListener('click', () => {
+                if (this.onPlayPauseClick) this.onPlayPauseClick();
+            });
+        }
 
-        this.elements.previousButton.addEventListener('click', () => {
-            if (this.onPreviousClick) this.onPreviousClick();
-        });
+        if (this.elements.previousButton) {
+            this.elements.previousButton.addEventListener('click', () => {
+                if (this.onPreviousClick) this.onPreviousClick();
+            });
+        }
 
-        this.elements.nextButton.addEventListener('click', () => {
-            if (this.onNextClick) this.onNextClick();
-        });
+        if (this.elements.nextButton) {
+            this.elements.nextButton.addEventListener('click', () => {
+                if (this.onNextClick) this.onNextClick();
+            });
+        }
         
         // Add repeat button click handler
-        this.elements.repeatButton.addEventListener('click', () => {
-            if (this.onRepeatToggle) this.onRepeatToggle();
-        });
+        if (this.elements.repeatButton) {
+            this.elements.repeatButton.addEventListener('click', () => {
+                if (this.onRepeatToggle) this.onRepeatToggle();
+            });
+        }
+        
+        // Add shuffle button click handler
+        if (this.elements.shuffleButton) {
+            this.elements.shuffleButton.addEventListener('click', () => {
+                if (this.onShuffleToggle) this.onShuffleToggle();
+            });
+        }
+        
+        // Add like button click handler
+        if (this.elements.likeButton) {
+            this.elements.likeButton.addEventListener('click', () => {
+                if (this.onLikeToggle) this.onLikeToggle();
+            });
+        }
 
         // Progress bar click and drag handlers
-        this.elements.progress.addEventListener('mousedown', (e) => {
-            this.isDragging = true;
-            this.pendingSeek = false;
-            // Store position but don't seek yet
-            this.updateDragPosition(e);
-        });
-        
-        // Add mousemove handler to track cursor position for the circle indicator
-        this.elements.progress.addEventListener('mousemove', (e) => {
-            if (!this.isDragging) {
-                // Update the position of the hover circle
-                const rect = this.elements.progress.getBoundingClientRect();
-                const percent = (e.clientX - rect.left) / rect.width;
-                this._updateHoverPosition(percent);
-            }
-        });
-        
-        // Remove the hover circle when mouse leaves
-        this.elements.progress.addEventListener('mouseleave', () => {
-            // Remove any hover circle
-            this._removeHoverCircle();
-        });
+        if (this.elements.progress) {
+            this.elements.progress.addEventListener('mousedown', (e) => {
+                this.isDragging = true;
+                this.pendingSeek = false;
+                // Store position but don't seek yet
+                this.updateDragPosition(e);
+            });
+            
+            // Add mousemove handler to track cursor position for the circle indicator
+            this.elements.progress.addEventListener('mousemove', (e) => {
+                if (!this.isDragging) {
+                    // Update the position of the hover circle
+                    const rect = this.elements.progress.getBoundingClientRect();
+                    const percent = (e.clientX - rect.left) / rect.width;
+                    this._updateHoverPosition(percent);
+                }
+            });
+            
+            // Remove the hover circle when mouse leaves
+            this.elements.progress.addEventListener('mouseleave', () => {
+                // Remove any hover circle
+                this._removeHoverCircle();
+            });
+        }
 
         // Continue with existing event listeners...
         document.addEventListener('mousemove', (e) => {
@@ -109,21 +124,47 @@ class UIManager {
         });
 
         // Volume control click handler
-        this.elements.volumeControl.addEventListener('click', (e) => {
-            if (this.onVolumeChange) {
-                const volumeWidth = this.elements.volumeControl.clientWidth;
-                const clickX = e.offsetX;
-                const volume = clickX / volumeWidth;
-                this.onVolumeChange(volume);
-            }
-        });
+        if (this.elements.volumeControl) {
+            this.elements.volumeControl.addEventListener('click', (e) => {
+                if (this.onVolumeChange) {
+                    const volumeWidth = this.elements.volumeControl.clientWidth;
+                    const clickX = e.offsetX;
+                    const volume = clickX / volumeWidth;
+                    this.onVolumeChange(volume);
+                }
+            });
+        }
 
         // Search input handler
-        this.elements.searchInput.addEventListener('input', (e) => {
-            if (this.onSearch) {
-                this.onSearch(e.target.value);
-            }
-        });
+        if (this.elements.searchInput) {
+            this.elements.searchInput.addEventListener('input', (e) => {
+                if (this.onSearch) {
+                    this.onSearch(e.target.value);
+                }
+            });
+        }
+        
+        // Sidebar navigation event listeners
+        if (this.elements.sidebarLinks) {
+            this.elements.sidebarLinks.forEach(link => {
+                if (link) {
+                    link.addEventListener('click', (e) => {
+                        e.preventDefault();
+                        
+                        // Get the view to show from data attribute
+                        const view = link.getAttribute('data-view');
+                        
+                        if (view && this.onViewChange) {
+                            this.onViewChange(view);
+                            
+                            // Update active state
+                            this.elements.sidebarLinks.forEach(l => l.classList.remove('active'));
+                            link.classList.add('active');
+                        }
+                    });
+                }
+            });
+        }
     }
     
     // Add methods to manage the hover circle
@@ -153,6 +194,26 @@ class UIManager {
             this.elements.repeatButton.classList.add('active');
         } else {
             this.elements.repeatButton.classList.remove('active');
+        }
+    }
+    
+    // Update shuffle button state
+    updateShuffleButton(isActive) {
+        if (isActive) {
+            this.elements.shuffleButton.classList.add('active');
+        } else {
+            this.elements.shuffleButton.classList.remove('active');
+        }
+    }
+    
+    // Update like button state
+    updateLikeButton(isLiked) {
+        if (isLiked) {
+            this.elements.likeButton.classList.add('liked');
+            this.elements.likeButton.querySelector('i').className = 'fas fa-heart';
+        } else {
+            this.elements.likeButton.classList.remove('liked');
+            this.elements.likeButton.querySelector('i').className = 'far fa-heart';
         }
     }
 
@@ -261,45 +322,46 @@ class UIManager {
         return `${minutes.toString().padStart(2, '0')}:${seconds.toString().padStart(2, '0')}`;
     }
 
+    showView(viewName) {
+        // Hide all views
+        this.elements.viewContainers.forEach(container => {
+            container.classList.remove('active');
+        });
+        
+        // Show the requested view
+        const viewToShow = document.getElementById(`${viewName}-view`);
+        if (viewToShow) {
+            viewToShow.classList.add('active');
+        }
+    }
+
     showNotification(message, type = 'info') {
-        // Remove any existing notifications
-        const existingNotification = document.querySelector('.notification');
-        if (existingNotification) {
-            existingNotification.remove();
+        // Check if notification container exists
+        let notificationContainer = document.querySelector('.notification-container');
+        
+        if (!notificationContainer) {
+            // Create notification container
+            notificationContainer = document.createElement('div');
+            notificationContainer.className = 'notification-container';
+            document.body.appendChild(notificationContainer);
         }
         
-        // Create notification element
+        // Create notification
         const notification = document.createElement('div');
         notification.className = `notification ${type}`;
         notification.textContent = message;
         
-        // Add to DOM
-        document.body.appendChild(notification);
+        // Add to container
+        notificationContainer.appendChild(notification);
         
-        // Auto-hide after 5 seconds for non-error notifications
-        if (type !== 'error') {
+        // Remove after timeout
+        setTimeout(() => {
+            notification.classList.add('fade-out');
             setTimeout(() => {
-                notification.classList.add('hide');
-                setTimeout(() => notification.remove(), 500);
-            }, 5000);
-        } else {
-            // Add close button for errors
-            const closeButton = document.createElement('button');
-            closeButton.className = 'notification-close';
-            closeButton.innerHTML = '&times;';
-            closeButton.addEventListener('click', () => {
-                notification.classList.add('hide');
-                setTimeout(() => notification.remove(), 500);
-            });
-            notification.appendChild(closeButton);
-            
-            // Auto-hide errors after 10 seconds
-            setTimeout(() => {
-                notification.classList.add('hide');
-                setTimeout(() => notification.remove(), 500);
-            }, 10000);
-        }
+                notification.remove();
+            }, 300);
+        }, 3000);
     }
 }
 
-export default UIManager; 
+export default UIManager;

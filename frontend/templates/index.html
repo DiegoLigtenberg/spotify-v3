@@ -2,7 +2,7 @@
 <html lang="en">
 <head>
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
     <title>Spotify Clone</title>
     <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}">
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css">
@@ -14,15 +14,37 @@
         <!-- Sidebar -->
         <div class="sidebar">
             <div class="logo">
-                <h1>Music Player</h1>
+                <h1>MusicTify</h1>
             </div>
             <nav>
                 <ul>
-                    <li><a href="#" class="active"><i class="fas fa-home"></i> Home</a></li>
-                    <li><a href="#"><i class="fas fa-search"></i> Search</a></li>
-                    <li><a href="#"><i class="fas fa-book"></i> Library</a></li>
+                    <li>
+                        <a href="#" class="sidebar-nav-item active" data-view="home">
+                            <i class="fas fa-home"></i>
+                            <span>Home</span>
+                        </a>
+                    </li>
+                    <li>
+                        <a href="#" class="sidebar-nav-item" data-view="liked">
+                            <i class="fas fa-heart"></i>
+                            <span>Liked Songs</span>
+                        </a>
+                    </li>
+                    <li>
+                        <a href="#" id="create-playlist" class="sidebar-nav-item">
+                            <i class="fas fa-plus-square"></i>
+                            <span>Create Playlist</span>
+                        </a>
+                    </li>
                 </ul>
             </nav>
+            
+            <div class="library-header">
+                <h3>Your Playlists</h3>
+            </div>
+            <div class="playlists-container">
+                <!-- Playlists will be dynamically added here -->
+            </div>
         </div>
 
         <!-- Main Content -->
@@ -31,8 +53,39 @@
                 <input type="text" id="search" placeholder="Search for songs...">
             </div>
             
-            <div class="songs-container">
-                <!-- Songs will be dynamically loaded here -->
+            <div class="content-options">
+                <button id="view-queue" class="action-button"><i class="fas fa-list"></i> Queue</button>
+            </div>
+            
+            <!-- Home View -->
+            <div id="home-view" class="view-container active">
+                <div class="songs-container">
+                    <!-- Songs will be dynamically loaded here -->
+                </div>
+            </div>
+            
+            <!-- Liked Songs View -->
+            <div id="liked-view" class="view-container">
+                <div class="liked-songs-header">
+                    <h1>Liked Songs</h1>
+                    <p id="liked-songs-count">0 songs</p>
+                </div>
+                <div class="liked-songs-content">
+                    <table class="songs-table">
+                        <thead>
+                            <tr>
+                                <th>#</th>
+                                <th>Title</th>
+                                <th>Album</th>
+                                <th>Duration</th>
+                                <th></th>
+                            </tr>
+                        </thead>
+                        <tbody id="liked-songs-list">
+                            <!-- Liked songs will be added here dynamically -->
+                        </tbody>
+                    </table>
+                </div>
             </div>
         </div>
 
@@ -44,13 +97,16 @@
                     <div id="current-song">No track selected</div>
                     <div id="current-artist">-</div>
                 </div>
+                <button id="like-current-song" class="like-button"><i class="far fa-heart"></i></button>
             </div>
             
             <div class="controls">
                 <div class="playback-controls">
+                    <button id="shuffle" class="control-button"><i class="fas fa-random"></i></button>
                     <button id="previous" class="control-button"><i class="fas fa-backward"></i></button>
                     <button id="play-pause"><i class="fas fa-play"></i></button>
                     <button id="next" class="control-button"><i class="fas fa-forward"></i></button>
+                    <button id="repeat-button" class="control-button"><i class="fas fa-redo"></i></button>
                 </div>
                 <div class="progress-container">
                     <span id="current-time">00:00</span>
@@ -66,9 +122,96 @@
                 <div class="volume-slider">
                     <div class="volume-progress"></div>
                 </div>
+                <button id="mobile-queue" class="control-button"><i class="fas fa-list"></i></button>
             </div>
         </div>
     </div>
+    
+    <div id="queue-modal" class="modal">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h2>Play Queue</h2>
+                <span class="close-modal">&times;</span>
+            </div>
+            <div class="queue-container">
+                <!-- Queue items will be displayed here -->
+            </div>
+        </div>
+    </div>
+
+    <!-- Add to Playlist Modal -->
+    <div id="add-to-playlist-modal" class="modal">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h2>Add to Playlist</h2>
+                <span class="close-modal">&times;</span>
+            </div>
+            <div class="modal-body">
+                <p>Select a playlist to add this song to:</p>
+                <div class="playlists-list">
+                    <!-- Playlists will be dynamically loaded here -->
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Create Playlist Modal -->
+    <div id="playlist-modal" class="modal">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h2>Create Playlist</h2>
+                <span class="close-modal">&times;</span>
+            </div>
+            <div class="modal-body">
+                <form id="create-playlist-form">
+                    <div class="form-group">
+                        <label for="playlist-name">Name</label>
+                        <input type="text" id="playlist-name" placeholder="My Playlist" required>
+                    </div>
+                    <div class="form-group">
+                        <label for="playlist-description">Description (optional)</label>
+                        <textarea id="playlist-description" placeholder="Describe your playlist"></textarea>
+                    </div>
+                    <div class="form-group">
+                        <button type="submit" class="btn-create-playlist">Create</button>
+                    </div>
+                </form>
+            </div>
+        </div>
+    </div>
+
+    <!-- Add the playlist view template (hidden) -->
+    <template id="playlist-view-template">
+        <div class="view-container playlist-view">
+            <div class="playlist-header">
+                <div class="playlist-cover">
+                    <i class="fas fa-music"></i>
+                </div>
+                <div class="playlist-info">
+                    <h1 class="playlist-title">Playlist Name</h1>
+                    <p class="description">Playlist description</p>
+                    <p class="creator">Created by you</p>
+                    <p class="song-count">0 songs</p>
+                </div>
+            </div>
+            <div class="playlist-content">
+                <table class="songs-table">
+                    <thead>
+                        <tr>
+                            <th>#</th>
+                            <th>Title</th>
+                            <th>Album</th>
+                            <th>Duration</th>
+                            <th></th>
+                        </tr>
+                    </thead>
+                    <tbody class="playlist-songs-list">
+                        <!-- Songs will be added here dynamically -->
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    </template>
 
     <script type="module" src="{{ url_for('static', filename='js/main.js') }}"></script>
 </body>
