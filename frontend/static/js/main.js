@@ -29,6 +29,16 @@ document.addEventListener('DOMContentLoaded', () => {
     let currentSong = null;
     let currentSongIndex = -1;
 
+    // Constants for pagination
+    const MAX_SONGS = 30;  // Maximum songs to show at once
+    const PAGE_SIZE = 30;  // Number of songs to fetch per request
+    const BUFFER_SIZE = 5; // Number of songs to keep before and after current song
+
+    let currentOffset = 0;
+    let hasMoreSongs = true;
+    let isLoading = false;
+    let totalSongsCount = 0;
+
     // Helper function to add event listeners
     function addAudioEventListener(event, listener) {
         audioEventListeners[event].push(listener);
@@ -74,46 +84,66 @@ document.addEventListener('DOMContentLoaded', () => {
         alert('Error playing the song. Please try again.');
     });
 
-    // Fetch songs from the API
-    async function fetchSongs() {
-        try {
-            const response = await fetch('/api/songs');
-            if (!response.ok) {
-                throw new Error(`HTTP error! status: ${response.status}`);
+    // Display songs in the container
+    function displaySongs(songsToDisplay) {
+        const container = document.querySelector('.songs-container');
+        container.innerHTML = ''; // Clear existing songs
+        
+        songsToDisplay.forEach(song => {
+            const songElement = createSongElement(song);
+            container.appendChild(songElement);
+        });
+        
+        // Update current song highlight if one is playing
+        if (currentSong) {
+            const currentElement = container.querySelector(`[data-song-id="${currentSong.id}"]`);
+            if (currentElement) {
+                currentElement.classList.add('playing');
             }
-            const data = await response.json();
-            console.log('Fetched songs:', data);
-            songs = data;
-            displaySongs(songs);
-        } catch (error) {
-            console.error('Error fetching songs:', error);
-            alert('Error loading songs. Please try again later.');
         }
     }
 
-    // Display songs in the container
-    function displaySongs(songsToDisplay) {
-        songsContainer.innerHTML = '';
-        songsToDisplay.forEach(song => {
-            const songElement = document.createElement('div');
-            songElement.className = 'song-card';
-            
-            // Create image element with error handling
-            const img = document.createElement('img');
-            img.src = song.id ? `/api/thumbnail/${song.id}` : '/static/images/default-album.png';
-            img.alt = song.title;
-            img.onerror = () => {
-                img.src = '/static/images/default-album.png';
-            };
-            
-            songElement.appendChild(img);
-            songElement.innerHTML += `
-                <h3>${song.title}</h3>
-                <p>${song.artist || 'Unknown Artist'}</p>
-            `;
-            songElement.addEventListener('click', () => playSong(song));
-            songsContainer.appendChild(songElement);
+    // Display new songs (appends to existing content)
+    function displayNewSongs(newSongs) {
+        const container = document.querySelector('.songs-container');
+        const existingSongIds = new Set(Array.from(container.children).map(el => el.dataset.songId));
+        
+        newSongs.forEach(song => {
+            if (!existingSongIds.has(song.id)) {
+                const songElement = createSongElement(song);
+                container.appendChild(songElement);
+            }
         });
+        
+        // Maintain current song highlight
+        if (currentSong) {
+            const currentElement = container.querySelector(`[data-song-id="${currentSong.id}"]`);
+            if (currentElement) {
+                currentElement.classList.add('playing');
+            }
+        }
+    }
+
+    // Helper function to create song element
+    function createSongElement(song) {
+        const songElement = document.createElement('div');
+        songElement.className = 'song-card';
+        songElement.dataset.songId = song.id;
+        
+        if (currentSong && song.id === currentSong.id) {
+            songElement.classList.add('playing');
+        }
+        
+        songElement.innerHTML = `
+            <img src="/api/thumbnail/${song.id}" 
+                 alt="Album Art" 
+                 onerror="this.src='/static/images/default.png'">
+            <h3>${song.title}</h3>
+            <p>${song.artist || 'Unknown Artist'}</p>
+        `;
+        
+        songElement.addEventListener('click', () => playSong(song));
+        return songElement;
     }
 
     // Play a song
@@ -197,11 +227,14 @@ document.addEventListener('DOMContentLoaded', () => {
             // Update UI elements with error handling for thumbnail
             currentSongElement.textContent = song.title;
             currentArtistElement.textContent = song.artist || 'Unknown Artist';
-            currentThumbnail.src = song.id ? `/api/thumbnail/${song.id}` : '/static/images/default-album.png';
+            currentThumbnail.src = `/api/thumbnail/${song.id}`;
             currentThumbnail.onerror = () => {
-                currentThumbnail.src = '/static/images/default-album.png';
+                currentThumbnail.src = '/static/images/default.png';
             };
             document.title = `${song.title} - ${song.artist || 'Unknown Artist'}`;
+            
+            // Load songs around the current song
+            loadSongsAroundIndex(currentSongIndex);
             
         } catch (error) {
             console.error('Error in playSong:', error);
@@ -280,6 +313,110 @@ document.addEventListener('DOMContentLoaded', () => {
         displaySongs(filteredSongs);
     });
 
+    // Modified fetchMoreSongs for infinite scroll
+    async function fetchMoreSongs() {
+        if (isLoading || !hasMoreSongs) return;
+
+        try {
+            isLoading = true;
+            console.log('Fetching more songs from offset:', currentOffset);
+            
+            const response = await fetch(`/api/songs?offset=${currentOffset}&limit=${PAGE_SIZE}`);
+            if (!response.ok) throw new Error(`HTTP error! status: ${response.status}`);
+            const data = await response.json();
+            
+            totalSongsCount = data.total;
+            hasMoreSongs = data.has_more;
+            
+            if (data.songs.length > 0) {
+                currentOffset += data.songs.length;
+                
+                // Add new songs while maintaining the MAX_SONGS limit
+                const existingSongIds = new Set(songs.map(s => s.id));
+                data.songs.forEach(song => {
+                    if (!existingSongIds.has(song.id)) {
+                        songs.push(song);
+                    }
+                });
+
+                // Trim songs array to maintain MAX_SONGS limit
+                if (songs.length > MAX_SONGS) {
+                    if (currentSongIndex === -1) {
+                        // If no song is playing, just keep the most recent MAX_SONGS
+                        songs = songs.slice(-MAX_SONGS);
+                    } else {
+                        // Keep the current song in the middle with buffer on both sides
+                        const start = Math.max(0, currentSongIndex - Math.floor(MAX_SONGS / 2));
+                        songs = songs.slice(start, start + MAX_SONGS);
+                    }
+                }
+
+                // Update display
+                displayNewSongs(data.songs);
+            }
+
+        } catch (error) {
+            console.error('Error fetching songs:', error);
+            alert('Error loading songs. Please try again.');
+        } finally {
+            isLoading = false;
+        }
+    }
+
+    // Function to load songs around current index
+    async function loadSongsAroundIndex(index) {
+        if (isLoading) return;
+
+        const startOffset = Math.max(0, index - BUFFER_SIZE);
+        const endOffset = index + BUFFER_SIZE;
+
+        try {
+            isLoading = true;
+            const response = await fetch(`/api/songs?offset=${startOffset}&limit=${BUFFER_SIZE * 2 + 1}`);
+            if (!response.ok) throw new Error(`HTTP error! status: ${response.status}`);
+            const data = await response.json();
+            
+            // Update total count if we don't have it
+            if (!totalSongsCount) totalSongsCount = data.total;
+
+            // Add new songs while maintaining the MAX_SONGS limit
+            const existingSongIds = new Set(songs.map(s => s.id));
+            data.songs.forEach(song => {
+                if (!existingSongIds.has(song.id)) {
+                    songs.push(song);
+                }
+            });
+
+            // Keep current song in the middle with buffer on both sides
+            if (songs.length > MAX_SONGS) {
+                const currentIndex = songs.findIndex(s => s.id === currentSong?.id);
+                const start = Math.max(0, currentIndex - Math.floor(MAX_SONGS / 2));
+                songs = songs.slice(start, start + MAX_SONGS);
+            }
+
+            // Update display
+            displaySongs(songs);
+        } catch (error) {
+            console.error('Error loading songs around index:', error);
+        } finally {
+            isLoading = false;
+        }
+    }
+
+    // Handle scrolling
+    function handleScroll() {
+        const container = document.querySelector('.songs-container');
+        const scrollPercentage = (container.scrollTop + container.clientHeight) / container.scrollHeight * 100;
+        
+        // Load more songs when user scrolls past 75% of the content
+        if (scrollPercentage > 75 && !isLoading && hasMoreSongs) {
+            fetchMoreSongs();
+        }
+    }
+
+    // Add scroll event listener
+    document.querySelector('.songs-container').addEventListener('scroll', handleScroll);
+
     // Initial load
-    fetchSongs();
+    fetchMoreSongs();
 }); 

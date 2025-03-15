@@ -1,4 +1,4 @@
-from flask import Flask, jsonify, render_template, Response, stream_with_context, make_response, send_file
+from flask import Flask, jsonify, render_template, Response, stream_with_context, make_response, send_file, request
 from flask_cors import CORS
 import os
 from supabase import create_client, Client
@@ -110,10 +110,36 @@ def index():
 @app.route('/api/songs')
 def get_songs():
     try:
-        logger.info("Fetching all songs from Supabase")
-        response = supabase.table('songs').select('*').execute()
-        logger.info(f"Found {len(response.data)} songs")
-        return jsonify(response.data)
+        # Get pagination parameters from query string
+        try:
+            page_size = min(int(request.args.get('limit', '30')), 30)  # Default and max 30
+            offset = int(request.args.get('offset', '0'))
+            logger.info(f"Fetching songs with limit {page_size} and offset {offset}")
+        except ValueError:
+            logger.error("Invalid pagination parameters")
+            return jsonify({'error': 'Invalid pagination parameters'}), 400
+
+        # First get total count
+        count_response = supabase.table('songs').select('*', count='exact').execute()
+        total_count = count_response.count if hasattr(count_response, 'count') else 0
+        logger.info(f"Total songs in database: {total_count}")
+
+        # Then get paginated results
+        response = supabase.table('songs') \
+            .select('*') \
+            .range(offset, offset + page_size - 1) \
+            .execute()
+
+        logger.info(f"Found {len(response.data)} songs for this page")
+        
+        return jsonify({
+            'songs': response.data,
+            'total': total_count,
+            'offset': offset,
+            'limit': page_size,
+            'has_more': (offset + len(response.data)) < total_count
+        })
+
     except Exception as e:
         logger.error(f"Error fetching songs: {str(e)}", exc_info=True)
         return jsonify({'error': str(e)}), 500
@@ -228,38 +254,44 @@ def get_thumbnail(song_id):
                 },
                 ExpiresIn=3600
             )
-        except Exception as e:
-            logger.error(f"Failed to generate pre-signed URL: {str(e)}")
-            return jsonify({'error': 'Failed to access thumbnail'}), 500
-
-        # Download the thumbnail
-        try:
+            logger.info(f"Generated pre-signed URL for thumbnail: {song_data['thumbnail_path']}")
+            
+            # Download the thumbnail
             response = requests.get(presigned_url)
             if response.status_code != 200:
-                return jsonify({'error': 'Failed to download thumbnail'}), 500
+                logger.error(f"Failed to download thumbnail: {response.status_code}")
+                return jsonify({'error': 'Failed to download thumbnail'}), 404
 
-            # Check if it's a WebP image
-            if song_data['thumbnail_path'].lower().endswith('.webp'):
-                # Convert to PNG
-                png_data = convert_webp_to_png(response.content)
-                if png_data:
-                    return send_file(
-                        png_data,
-                        mimetype='image/png',
-                        as_attachment=False,
-                        download_name=f"{song_id}.png"
-                    )
-            
-            # If not WebP or conversion failed, return original
-            return send_file(
-                BytesIO(response.content),
-                mimetype=response.headers.get('Content-Type', 'image/jpeg'),
-                as_attachment=False
-            )
+            # Convert WebP to PNG
+            try:
+                # Open WebP image from bytes
+                img = Image.open(BytesIO(response.content))
+                
+                # Convert to RGB/RGBA as needed
+                if img.mode in ('RGBA', 'LA') or (img.mode == 'P' and 'transparency' in img.info):
+                    img = img.convert('RGBA')
+                else:
+                    img = img.convert('RGB')
+                
+                # Save as PNG to BytesIO
+                output = BytesIO()
+                img.save(output, format='PNG')
+                output.seek(0)
+                
+                return send_file(
+                    output,
+                    mimetype='image/png',
+                    as_attachment=False,
+                    download_name=f"{song_id}.png"
+                )
+                
+            except Exception as e:
+                logger.error(f"Error converting WebP to PNG: {str(e)}")
+                return jsonify({'error': 'Failed to convert image'}), 500
 
         except Exception as e:
-            logger.error(f"Error processing thumbnail: {str(e)}")
-            return jsonify({'error': 'Failed to process thumbnail'}), 500
+            logger.error(f"Error accessing thumbnail: {str(e)}")
+            return jsonify({'error': 'Failed to access thumbnail'}), 500
 
     except Exception as e:
         logger.error(f"Error in get_thumbnail: {str(e)}")
