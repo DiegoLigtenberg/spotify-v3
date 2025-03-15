@@ -304,9 +304,16 @@ class UIManager {
             songElement.classList.add('playing');
         }
         
+        // Use lazy loading for thumbnails
+        const thumbnailUrl = isPlaying ? 
+            `/api/thumbnail/${song.id}` : // Load immediately if playing
+            `/static/images/placeholder.png`; // Use placeholder initially
+        
         songElement.innerHTML = `
-            <img src="/api/thumbnail/${song.id}" 
+            <img src="${thumbnailUrl}" 
+                 ${!isPlaying ? `data-src="/api/thumbnail/${song.id}"` : ''}
                  alt="Album Art" 
+                 loading="lazy"
                  onerror="this.src='/static/images/default.png'">
             <h3>${song.title}</h3>
             <p>${song.artist || 'Unknown Artist'}</p>

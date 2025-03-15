@@ -265,9 +265,9 @@ def stream_song(song_id):
                 'Access-Control-Allow-Origin': '*',
                 'Access-Control-Allow-Methods': 'GET, OPTIONS',
                 'Access-Control-Allow-Headers': 'Range, Origin, X-Requested-With, Content-Type, Accept',
-                'Cache-Control': 'no-cache, no-store, must-revalidate',
-                'Pragma': 'no-cache',
-                'Expires': '0'
+                'Cache-Control': 'public, max-age=86400',  # Cache for 1 day
+                'Pragma': 'cache',
+                'Expires': '86400'
             })
             
             logger.info(f"Successfully streaming audio content, content-type: {content_type}")
@@ -330,12 +330,21 @@ def get_thumbnail(song_id):
                 img.save(output, format='PNG')
                 output.seek(0)
                 
-                return send_file(
+                response = send_file(
                     output,
                     mimetype='image/png',
                     as_attachment=False,
                     download_name=f"{song_id}.png"
                 )
+                
+                # Add caching headers for better performance
+                response.headers.update({
+                    'Cache-Control': 'public, max-age=604800',  # Cache for 1 week
+                    'Pragma': 'cache',
+                    'Expires': '604800'
+                })
+                
+                return response
                 
             except Exception as e:
                 logger.error(f"Error converting WebP to PNG: {str(e)}")

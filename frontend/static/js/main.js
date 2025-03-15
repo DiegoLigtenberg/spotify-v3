@@ -187,10 +187,27 @@ class MusicPlayer {
     async initializeApplication() {
         try {
             await this.songListManager.fetchMoreSongs('down');
+            
+            // Preload the first few thumbnails
+            this._preloadThumbnails();
         } catch (error) {
             console.error('Error initializing application:', error);
             alert('Error loading songs. Please refresh the page.');
         }
+    }
+
+    // Add a method to preload thumbnails
+    _preloadThumbnails() {
+        // Preload the first 10 thumbnails
+        console.log('Preloading thumbnails for better performance...');
+        const songsToPreload = this.songListManager.songs.slice(0, 10);
+        
+        songsToPreload.forEach(song => {
+            if (song && song.id) {
+                const img = new Image();
+                img.src = `/api/thumbnail/${song.id}`;
+            }
+        });
     }
 
     displaySongs(songs) {
@@ -210,14 +227,54 @@ class MusicPlayer {
             return;
         }
         
+        // Use a document fragment for better performance
+        const fragment = document.createDocumentFragment();
+        
         songs.forEach(song => {
             const songElement = this.uiManager.createSongElement(
                 song,
                 this.currentSong && song.id === this.currentSong.id
             );
             songElement.addEventListener('click', () => this.playSong(song));
-            container.appendChild(songElement);
+            fragment.appendChild(songElement);
         });
+        
+        // Add all songs at once for better performance
+        container.appendChild(fragment);
+        
+        // Lazy load images as they come into view
+        this._setupLazyLoading();
+    }
+
+    _setupLazyLoading() {
+        // Use IntersectionObserver for lazy loading
+        if ('IntersectionObserver' in window) {
+            const observer = new IntersectionObserver((entries, observer) => {
+                entries.forEach(entry => {
+                    if (entry.isIntersecting) {
+                        const img = entry.target;
+                        const dataSrc = img.getAttribute('data-src');
+                        
+                        if (dataSrc) {
+                            img.src = dataSrc;
+                            img.removeAttribute('data-src');
+                        }
+                        
+                        observer.unobserve(img);
+                    }
+                });
+            });
+            
+            // Observe all song thumbnails
+            document.querySelectorAll('img[data-src]').forEach(img => {
+                observer.observe(img);
+            });
+        } else {
+            // Fallback for browsers that don't support IntersectionObserver
+            document.querySelectorAll('img[data-src]').forEach(img => {
+                img.src = img.getAttribute('data-src');
+            });
+        }
     }
 
     async playSong(song) {
