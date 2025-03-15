@@ -43,6 +43,11 @@ logging.basicConfig(
 )
 logger = logging.getLogger(__name__)
 
+# Set up separate frontend logger
+frontend_logger = logging.getLogger('frontend')
+frontend_logger.setLevel(logging.DEBUG)
+frontend_logger.propagate = False  # Don't send logs to parent logger
+
 # Create temp directory for converted images
 TEMP_DIR = os.path.join(tempfile.gettempdir(), 'music_player_temp')
 os.makedirs(TEMP_DIR, exist_ok=True)
@@ -123,7 +128,7 @@ except Exception as e:
 
 @app.route('/')
 def index():
-    is_production = os.getenv('RAILWAY_ENVIRONMENT') == 'True'
+    is_production = os.getenv('RAILWAY_ENVIRONMENT_PRODUCTION') == 'True'
     env_vars = {
         'IS_PRODUCTION': is_production
     }
@@ -375,6 +380,42 @@ def stream_song_options(song_id):
     # Handle OPTIONS preflight requests for CORS
     response = jsonify({'status': 'ok'})
     return response
+
+@app.route('/api/client-logs', methods=['POST'])
+def client_logs():
+    """Endpoint to receive client-side logs from the browser"""
+    if os.getenv('RAILWAY_ENVIRONMENT_PRODUCTION') == 'True':
+        # Don't log in production
+        return jsonify({'status': 'ignored'})
+    
+    try:
+        log_data = request.get_json()
+        if not log_data or 'logs' not in log_data:
+            return jsonify({'status': 'error', 'message': 'Invalid log data'}), 400
+        
+        logs = log_data['logs']
+        for log in logs:
+            level = log.get('level', 'info').upper()
+            timestamp = log.get('timestamp', '')
+            message = log.get('message', '')
+            
+            # Write to the frontend logger
+            log_message = f"{timestamp} - {message}"
+            
+            # Choose the appropriate log level
+            if level == 'ERROR':
+                frontend_logger.error(log_message)
+            elif level == 'WARN' or level == 'WARNING':
+                frontend_logger.warning(log_message)
+            elif level == 'INFO':
+                frontend_logger.info(log_message)
+            else:
+                frontend_logger.debug(log_message)
+        
+        return jsonify({'status': 'success', 'count': len(logs)})
+    except Exception as e:
+        logger.error(f"Error processing client logs: {str(e)}")
+        return jsonify({'status': 'error', 'message': str(e)}), 500
 
 if __name__ == '__main__':
     app.run(debug=True) 

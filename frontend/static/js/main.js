@@ -3,8 +3,250 @@ import SongListManager from './modules/SongListManager.js';
 import UIManager from './modules/UIManager.js';
 import PlaylistManager from './modules/PlaylistManager.js';
 
+// Set up client-side logging to server
+class BrowserLogger {
+    constructor() {
+        this.isProduction = window.ENV && window.ENV.IS_PRODUCTION === true;
+        this.logQueue = [];
+        this.isSending = false;
+        this.logLevel = 'debug'; // default level
+        this.userAgent = navigator.userAgent;
+        
+        // Don't set up logging in production
+        if (this.isProduction) {
+            console.log('Production mode detected, server logging disabled');
+            return;
+        }
+        
+        // Log initial browser info
+        this.logBrowserInfo();
+        
+        this.setupConsoleOverrides();
+        this.setupErrorHandling();
+        
+        // Flush logs periodically
+        setInterval(() => this.flushLogs(), 2000);
+        
+        // Flush logs on page unload
+        window.addEventListener('beforeunload', () => this.flushLogs(true));
+    }
+    
+    logBrowserInfo() {
+        const browserInfo = {
+            userAgent: navigator.userAgent,
+            language: navigator.language,
+            platform: navigator.platform,
+            screenWidth: window.screen.width,
+            screenHeight: window.screen.height,
+            windowWidth: window.innerWidth,
+            windowHeight: window.innerHeight,
+            pixelRatio: window.devicePixelRatio,
+            cookiesEnabled: navigator.cookieEnabled,
+            timestamp: new Date().toISOString()
+        };
+        
+        this.addToQueue('info', [`Browser Session Started: ${JSON.stringify(browserInfo)}`]);
+    }
+    
+    // Get approximate source location for logging
+    getCallerInfo() {
+        try {
+            const err = new Error();
+            const stack = err.stack.split('\n');
+            // Skip the first few entries as they'll be this logger's functions
+            for (let i = 3; i < stack.length; i++) {
+                const line = stack[i].trim();
+                if (line.includes('at ') && !line.includes('BrowserLogger')) {
+                    // Extract just the file name and line number
+                    const match = line.match(/at .*\((.*):(\d+):(\d+)\)/) || 
+                                  line.match(/at (.*):(\d+):(\d+)/);
+                    if (match) {
+                        const [_, file, lineNum, colNum] = match;
+                        // Get just the file name without the path
+                        const fileName = file.split('/').pop();
+                        return `${fileName}:${lineNum}`;
+                    }
+                    return line.replace('at ', '').trim();
+                }
+            }
+            return '';
+        } catch (e) {
+            return '';
+        }
+    }
+    
+    setupConsoleOverrides() {
+        // Store original console methods
+        const originalConsole = {
+            log: console.log,
+            info: console.info,
+            warn: console.warn,
+            error: console.error,
+            debug: console.debug
+        };
+        
+        // Override console methods
+        console.log = (...args) => {
+            this.addToQueue('log', args, this.getCallerInfo());
+            originalConsole.log.apply(console, args);
+        };
+        
+        console.info = (...args) => {
+            this.addToQueue('info', args, this.getCallerInfo());
+            originalConsole.info.apply(console, args);
+        };
+        
+        console.warn = (...args) => {
+            this.addToQueue('warn', args, this.getCallerInfo());
+            originalConsole.warn.apply(console, args);
+        };
+        
+        console.error = (...args) => {
+            this.addToQueue('error', args, this.getCallerInfo());
+            originalConsole.error.apply(console, args);
+        };
+        
+        console.debug = (...args) => {
+            this.addToQueue('debug', args, this.getCallerInfo());
+            originalConsole.debug.apply(console, args);
+        };
+    }
+    
+    setupErrorHandling() {
+        window.addEventListener('error', (event) => {
+            const location = `${event.filename.split('/').pop()}:${event.lineno}:${event.colno}`;
+            this.addToQueue('error', [`Uncaught error: ${event.message}`, 
+                                     `at ${location}`,
+                                     event.error?.stack]);
+        });
+        
+        window.addEventListener('unhandledrejection', (event) => {
+            this.addToQueue('error', [`Unhandled Promise rejection: ${event.reason}`,
+                                     event.reason?.stack]);
+        });
+        
+        // Additional events
+        window.addEventListener('load', () => {
+            this.addToQueue('info', ['Page fully loaded']);
+            this.logResourceStats();
+        });
+        
+        // Track page visibility changes
+        document.addEventListener('visibilitychange', () => {
+            this.addToQueue('info', [`Page visibility changed: ${document.visibilityState}`]);
+        });
+    }
+    
+    logResourceStats() {
+        if (!window.performance || !window.performance.getEntriesByType) return;
+        
+        const resources = window.performance.getEntriesByType('resource');
+        let stats = {
+            totalResources: resources.length,
+            totalSize: 0,
+            totalTime: 0,
+            slowestResource: { name: 'none', time: 0 }
+        };
+        
+        resources.forEach(resource => {
+            const size = resource.transferSize || 0;
+            const time = resource.duration || 0;
+            
+            stats.totalSize += size;
+            stats.totalTime += time;
+            
+            if (time > stats.slowestResource.time) {
+                stats.slowestResource = {
+                    name: resource.name.split('/').pop(), // Just the filename
+                    time: time
+                };
+            }
+        });
+        
+        // Convert totalSize to KB for readability
+        stats.totalSize = (stats.totalSize / 1024).toFixed(2) + ' KB';
+        stats.totalTime = stats.totalTime.toFixed(2) + ' ms';
+        stats.slowestResource.time = stats.slowestResource.time.toFixed(2) + ' ms';
+        
+        this.addToQueue('info', [`Page resource stats: ${JSON.stringify(stats)}`]);
+    }
+    
+    addToQueue(level, args, source = '') {
+        // Don't queue logs in production
+        if (this.isProduction) return;
+        
+        try {
+            const timestamp = new Date().toISOString();
+            let message = args.map(arg => {
+                if (typeof arg === 'object') {
+                    try {
+                        return JSON.stringify(arg);
+                    } catch (e) {
+                        return String(arg);
+                    }
+                }
+                return String(arg);
+            }).join(' ');
+            
+            // Add source information if available
+            if (source) {
+                message = `[${source}] ${message}`;
+            }
+            
+            const logEntry = {
+                timestamp,
+                level,
+                message,
+                source
+            };
+            
+            this.logQueue.push(logEntry);
+            
+            // Flush immediately for errors
+            if (level === 'error') {
+                this.flushLogs();
+            }
+        } catch (e) {
+            // Don't break if there's an error in logging
+        }
+    }
+    
+    async flushLogs(isUnloading = false) {
+        // Skip if no logs or already sending
+        if (this.logQueue.length === 0 || this.isSending) return;
+        
+        // Mark as sending to prevent concurrent sends
+        this.isSending = true;
+        
+        const logs = [...this.logQueue];
+        this.logQueue = [];
+        
+        try {
+            const fetchOptions = {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json'
+                },
+                body: JSON.stringify({ logs }),
+                // For page unload, use keepalive to ensure the request completes
+                keepalive: isUnloading
+            };
+            
+            await fetch('/api/client-logs', fetchOptions);
+        } catch (e) {
+            // If sending fails, add logs back to the queue
+            this.logQueue = [...logs, ...this.logQueue];
+        } finally {
+            this.isSending = false;
+        }
+    }
+}
+
 class MusicPlayer {
     constructor() {
+        // Initialize browser logger in development
+        this.logger = new BrowserLogger();
+        
         this.currentSong = null;
         this.currentSongIndex = -1;
         this.seekInProgress = false;
