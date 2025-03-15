@@ -18,6 +18,7 @@ class AudioPlayer {
         this.isPlaying = false;
         this.pendingSeek = false;
         this.seekAttempts = 0;
+        this.isRepeatEnabled = false;
         
         this.eventListeners = {
             timeupdate: [],
@@ -25,7 +26,8 @@ class AudioPlayer {
             error: [],
             play: [],
             pause: [],
-            seek: []
+            seek: [],
+            repeatChanged: []
         };
         
         // Set up audio event listeners
@@ -42,16 +44,6 @@ class AudioPlayer {
             }
         });
 
-        // Set up spacebar handling for skipping forward
-        document.addEventListener('keydown', (e) => {
-            if (e.code === 'Space' && !e.target.matches('input, textarea')) {
-                e.preventDefault();
-                if (this.isLoaded) {
-                    this.skipForward(10);
-                }
-            }
-        });
-        
         // Debug the server's range request support
         this._checkRangeSupport();
     }
@@ -102,8 +94,19 @@ class AudioPlayer {
         this.audioElement.addEventListener('ended', () => {
             console.log('Playback ended');
             this.isPlaying = false;
-            this.lastPosition = 0;
-            this._triggerEvent('ended');
+            
+            // Handle repeat if enabled
+            if (this.isRepeatEnabled) {
+                console.log('Repeat enabled, restarting track');
+                this.lastPosition = 0;
+                this.seek(0);
+                this.resume().catch(error => {
+                    console.error('Error restarting track for repeat:', error);
+                });
+            } else {
+                this.lastPosition = 0;
+                this._triggerEvent('ended');
+            }
         });
         
         this.audioElement.addEventListener('loadedmetadata', () => {
@@ -583,6 +586,17 @@ class AudioPlayer {
                 reject(error);
             }
         });
+    }
+
+    toggleRepeat() {
+        this.isRepeatEnabled = !this.isRepeatEnabled;
+        console.log(`Repeat ${this.isRepeatEnabled ? 'enabled' : 'disabled'}`);
+        this._triggerEvent('repeatChanged', { isRepeatEnabled: this.isRepeatEnabled });
+        return this.isRepeatEnabled;
+    }
+
+    get isRepeat() {
+        return this.isRepeatEnabled;
     }
 }
 

@@ -105,10 +105,20 @@ class MusicPlayer {
             this.seekInProgress = false;
         });
 
+        // Add repeat change event listener
+        this.audioPlayer.addEventListener('repeatChanged', (e) => {
+            console.log('Repeat state changed:', e.isRepeatEnabled);
+            this.uiManager.updateRepeatButton(e.isRepeatEnabled);
+        });
+
         // UI event handlers
         this.uiManager.onPlayPauseClick = () => this.handlePlayPause();
         this.uiManager.onPreviousClick = () => this.playPrevious();
         this.uiManager.onNextClick = () => this.playNext();
+        
+        // Add repeat toggle handler
+        this.uiManager.onRepeatToggle = () => this.toggleRepeat();
+        
         this.uiManager.onProgressClick = (position) => {
             if (!this.currentSong || !this.audioPlayer.duration) return;
             
@@ -289,6 +299,13 @@ class MusicPlayer {
         // Load songs around current song for better UX
         this.songListManager.loadSongsAroundIndex(this.currentSongIndex)
             .catch(err => console.error('Error loading songs around current index:', err));
+    }
+
+    // Add a method to toggle repeat mode
+    toggleRepeat() {
+        const isRepeatEnabled = this.audioPlayer.toggleRepeat();
+        console.log(`Repeat mode ${isRepeatEnabled ? 'enabled' : 'disabled'}`);
+        // UI is updated via the repeatChanged event
     }
 }
 

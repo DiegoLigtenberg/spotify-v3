@@ -13,7 +13,8 @@ class UIManager {
             currentArtistElement: document.getElementById('current-artist'),
             currentThumbnail: document.getElementById('current-thumbnail'),
             volumeControl: document.querySelector('.volume-slider'),
-            volumeProgress: document.querySelector('.volume-progress')
+            volumeProgress: document.querySelector('.volume-progress'),
+            repeatButton: document.getElementById('repeat-button') || this._createRepeatButton()
         };
 
         // Initialize event handlers
@@ -23,12 +24,29 @@ class UIManager {
         this.onProgressClick = null;
         this.onVolumeChange = null;
         this.onSearch = null;
+        this.onRepeatToggle = null;
 
         this.isDragging = false;
         this.pendingSeek = false;
         this.dragPosition = 0;
         this.lastProgressUpdate = 0; // Track last update time
         this.setupEventListeners();
+    }
+
+    _createRepeatButton() {
+        // Create repeat button if it doesn't exist in the DOM
+        const repeatButton = document.createElement('button');
+        repeatButton.id = 'repeat-button';
+        repeatButton.className = 'control-button';
+        repeatButton.innerHTML = '<i class="fas fa-redo"></i>';
+        
+        // Insert it in the playback controls
+        const playbackControls = document.querySelector('.playback-controls');
+        if (playbackControls) {
+            playbackControls.appendChild(repeatButton);
+        }
+        
+        return repeatButton;
     }
 
     setupEventListeners() {
@@ -44,6 +62,11 @@ class UIManager {
         this.elements.nextButton.addEventListener('click', () => {
             if (this.onNextClick) this.onNextClick();
         });
+        
+        // Add repeat button click handler
+        this.elements.repeatButton.addEventListener('click', () => {
+            if (this.onRepeatToggle) this.onRepeatToggle();
+        });
 
         // Progress bar click and drag handlers
         this.elements.progress.addEventListener('mousedown', (e) => {
@@ -52,7 +75,24 @@ class UIManager {
             // Store position but don't seek yet
             this.updateDragPosition(e);
         });
+        
+        // Add mousemove handler to track cursor position for the circle indicator
+        this.elements.progress.addEventListener('mousemove', (e) => {
+            if (!this.isDragging) {
+                // Update the position of the hover circle
+                const rect = this.elements.progress.getBoundingClientRect();
+                const percent = (e.clientX - rect.left) / rect.width;
+                this._updateHoverPosition(percent);
+            }
+        });
+        
+        // Remove the hover circle when mouse leaves
+        this.elements.progress.addEventListener('mouseleave', () => {
+            // Remove any hover circle
+            this._removeHoverCircle();
+        });
 
+        // Continue with existing event listeners...
         document.addEventListener('mousemove', (e) => {
             if (this.isDragging) {
                 // Just update position during drag, don't seek
@@ -84,6 +124,36 @@ class UIManager {
                 this.onSearch(e.target.value);
             }
         });
+    }
+    
+    // Add methods to manage the hover circle
+    _updateHoverPosition(percent) {
+        // Remove existing hover circle
+        this._removeHoverCircle();
+        
+        // Create the hover circle at the cursor position
+        const circle = document.createElement('div');
+        circle.className = 'progress-hover-circle';
+        circle.style.left = `${percent * 100}%`;
+        
+        // Add it to the progress bar
+        this.elements.progress.appendChild(circle);
+    }
+    
+    _removeHoverCircle() {
+        const circle = this.elements.progress.querySelector('.progress-hover-circle');
+        if (circle) {
+            circle.remove();
+        }
+    }
+
+    // Update repeat button state
+    updateRepeatButton(isActive) {
+        if (isActive) {
+            this.elements.repeatButton.classList.add('active');
+        } else {
+            this.elements.repeatButton.classList.remove('active');
+        }
     }
 
     updateDragPosition(e) {

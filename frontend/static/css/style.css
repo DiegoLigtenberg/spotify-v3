@@ -202,18 +202,19 @@ nav ul li a.active {
     color: #b3b3b3;
 }
 
+/* Controls layout */
 .controls {
     display: flex;
     flex-direction: column;
     align-items: center;
-    gap: 8px;
+    gap: 4px;
 }
 
 .playback-controls {
     display: flex;
     align-items: center;
     gap: 16px;
-    margin-bottom: 8px;
+    margin-bottom: 4px;
 }
 
 /* Volume control */
@@ -266,6 +267,11 @@ nav ul li a.active {
     color: #ffffff;
 }
 
+/* Active state for control buttons like repeat */
+.control-button.active {
+    color: #1DB954;
+}
+
 /* Improve the play button */
 #play-pause {
     background-color: #ffffff;
@@ -290,23 +296,18 @@ nav ul li a.active {
     font-size: 14px;
 }
 
-/* Add hover effect to the progress bar */
-.progress:hover .progress-bar {
-    background-color: #1ed760;
+/* Progress container positioning */
+.progress-container {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    width: 100%;
+    margin: 4px 0 8px;
+    position: relative;
+    top: -2px;
 }
 
-.progress:hover::after {
-    content: '';
-    position: absolute;
-    right: -6px;
-    top: -4px;
-    width: 12px;
-    height: 12px;
-    background-color: #ffffff;
-    border-radius: 50%;
-    transform: translateX(-100%);
-}
-
+/* Fixed progress bar hover effect */
 .progress {
     width: 100%;
     height: 4px;
@@ -316,26 +317,53 @@ nav ul li a.active {
     position: relative;
 }
 
-.progress-container {
-    display: flex;
-    align-items: center;
-    gap: 10px;
-    width: 100%;
-    margin: 10px 0;
+.progress:hover {
+    height: 6px;
+}
+
+.progress:hover .progress-bar {
+    background-color: #1ed760;
+}
+
+/* Remove the static hover circle */
+.progress:hover::after {
+    content: none;
+}
+
+/* Dynamic hover circle that follows the mouse */
+.progress-hover-circle {
+    position: absolute;
+    top: 50%;
+    width: 12px;
+    height: 12px;
+    background-color: #ffffff;
+    border-radius: 50%;
+    transform: translate(-50%, -50%);
+    pointer-events: none;
+    z-index: 10;
+}
+
+/* Specific repeat button styles */
+#repeat-button {
+    font-size: 16px;
+    padding: 5px;
+}
+
+#repeat-button.active {
+    color: #1DB954;
+}
+
+/* Add hover effect to the progress bar */
+.progress:hover .progress-bar {
+    background-color: #1ed760;
 }
 
 #current-time, #total-duration {
     font-size: 12px;
     color: #b3b3b3;
     min-width: 45px;
-}
-
-.progress-bar {
-    height: 100%;
-    background-color: #1db954;
-    border-radius: 2px;
-    width: 0;
-    transition: width 0.1s linear;
+    position: relative;
+    top: -1px;
 }
 
 /* Improve thumbnail handling */
@@ -344,13 +372,12 @@ nav ul li a.active {
     height: 60px;
 }
 
-/* Add hover effect for progress bar */
-.progress:hover {
-    height: 6px;
-}
-
-.progress:hover .progress-bar {
-    background-color: #1ed760;
+.progress-bar {
+    height: 100%;
+    background-color: #1db954;
+    border-radius: 2px;
+    width: 0;
+    transition: width 0.1s linear;
 }
 
 /* Notification Styles */
