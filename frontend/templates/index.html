@@ -9,6 +9,13 @@
     <link rel="icon" type="image/x-icon" href="{{ url_for('static', filename='images/favicon.ico') }}">
     <script src="https://cdnjs.cloudflare.com/ajax/libs/howler/2.2.4/howler.min.js"></script>
     
+    <!-- Environment variables for JavaScript -->
+    <script>
+        window.ENV = {
+            IS_PRODUCTION: {{ env_vars.IS_PRODUCTION|tojson }}
+        };
+    </script>
+    
     <!-- Register Service Worker for better performance -->
     <script>
         // Register service worker for caching and offline support

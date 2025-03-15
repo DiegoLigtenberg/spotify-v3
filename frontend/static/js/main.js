@@ -305,12 +305,11 @@ class MusicPlayer {
             ];
             
             // Check if we're in a production environment (like Railway)
-            const isProduction = window.location.hostname !== 'localhost' && 
-                                window.location.hostname !== '127.0.0.1';
+            const isProduction = window.ENV && window.ENV.IS_PRODUCTION === true;
             
             // In production environments, prioritize the API endpoint which might be more reliable
             if (isProduction) {
-                console.log('Production environment detected (possibly Railway), prioritizing API endpoint');
+                console.log('Production environment detected (Railway), prioritizing API endpoint');
                 
                 // Try the API endpoint with a cache-busting parameter
                 try {

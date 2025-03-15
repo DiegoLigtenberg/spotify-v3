@@ -22,7 +22,7 @@ app = Flask(__name__,
 )
 
 # Configure CORS based on environment
-if os.getenv('RAILWAY_ENVIRONMENT'):
+if os.getenv('RAILWAY_ENVIRONMENT') == 'True':
     # In production, only allow requests from your Railway domain
     CORS(app, resources={
         r"/api/*": {
@@ -123,7 +123,11 @@ except Exception as e:
 
 @app.route('/')
 def index():
-    return render_template('index.html')
+    is_production = os.getenv('RAILWAY_ENVIRONMENT') == 'True'
+    env_vars = {
+        'IS_PRODUCTION': is_production
+    }
+    return render_template('index.html', env_vars=env_vars)
 
 @app.route('/api/songs')
 def get_songs():
