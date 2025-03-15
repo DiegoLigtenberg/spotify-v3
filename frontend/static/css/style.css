@@ -1,0 +1,313 @@
+* {
+    margin: 0;
+    padding: 0;
+    box-sizing: border-box;
+}
+
+body {
+    font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, 'Open Sans', 'Helvetica Neue', sans-serif;
+    background-color: #121212;
+    color: #ffffff;
+}
+
+.container {
+    display: grid;
+    grid-template-columns: 240px 1fr;
+    grid-template-rows: 1fr 90px;
+    height: 100vh;
+}
+
+/* Sidebar styles */
+.sidebar {
+    background-color: #000000;
+    padding: 24px;
+    grid-row: 1 / 2;
+}
+
+.logo h1 {
+    color: #1DB954;
+    font-size: 24px;
+    margin-bottom: 24px;
+}
+
+nav ul {
+    list-style: none;
+}
+
+nav ul li {
+    margin-bottom: 16px;
+}
+
+nav ul li a {
+    color: #b3b3b3;
+    text-decoration: none;
+    font-size: 14px;
+    font-weight: 600;
+    transition: color 0.2s;
+}
+
+nav ul li a:hover,
+nav ul li a.active {
+    color: #ffffff;
+}
+
+/* Navigation icons */
+.sidebar nav ul li a i {
+    margin-right: 12px;
+    width: 24px;
+}
+
+/* Main content styles */
+.main-content {
+    padding: 24px;
+    background: linear-gradient(to bottom, #404040, #121212);
+    overflow-y: auto;
+}
+
+.search-bar {
+    margin-bottom: 24px;
+    max-width: 400px;
+}
+
+.search-bar input {
+    width: 100%;
+    padding: 12px 16px;
+    border-radius: 500px;
+    border: none;
+    background-color: #ffffff;
+    color: #000000;
+    font-size: 14px;
+}
+
+.search-bar input::placeholder {
+    color: #757575;
+}
+
+.songs-container {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(180px, 1fr));
+    gap: 24px;
+    padding: 20px 0;
+}
+
+.song-card {
+    background: #282828;
+    padding: 16px;
+    border-radius: 8px;
+    transition: background-color 0.3s;
+    cursor: pointer;
+}
+
+.song-card:hover {
+    background: #383838;
+}
+
+.song-card img {
+    width: 100%;
+    height: auto;
+    object-fit: cover;
+    border-radius: 4px;
+    margin-bottom: 16px;
+}
+
+.song-card h3 {
+    font-size: 16px;
+    font-weight: 600;
+    margin-bottom: 8px;
+    color: #fff;
+}
+
+.song-card p {
+    font-size: 14px;
+    color: #b3b3b3;
+}
+
+/* Player styles */
+.player {
+    background-color: #181818;
+    grid-column: 1 / -1;
+    grid-row: 2 / 3;
+    border-top: 1px solid #282828;
+    padding: 16px 32px;
+    display: grid;
+    grid-template-columns: 1fr 2fr 1fr;
+    align-items: center;
+}
+
+.now-playing {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+}
+
+.now-playing img {
+    width: 56px;
+    height: 56px;
+    object-fit: cover;
+    border-radius: 4px;
+}
+
+.track-info {
+    color: #ffffff;
+}
+
+#current-song {
+    font-size: 14px;
+    font-weight: 500;
+}
+
+#current-artist {
+    font-size: 12px;
+    color: #b3b3b3;
+}
+
+.controls {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 8px;
+}
+
+.playback-controls {
+    display: flex;
+    align-items: center;
+    gap: 16px;
+    margin-bottom: 8px;
+}
+
+/* Volume control */
+.volume-control {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    justify-content: flex-end;
+}
+
+.volume-slider {
+    width: 100px;
+    height: 4px;
+    background-color: #404040;
+    border-radius: 2px;
+    cursor: pointer;
+    position: relative;
+}
+
+.volume-progress {
+    height: 100%;
+    background-color: #1DB954;
+    border-radius: 2px;
+    width: 100%;
+    position: absolute;
+    top: 0;
+    left: 0;
+}
+
+.volume-control i {
+    color: #b3b3b3;
+    cursor: pointer;
+}
+
+.volume-control i:hover {
+    color: #ffffff;
+}
+
+/* Control buttons */
+.control-button {
+    background: none;
+    border: none;
+    color: #b3b3b3;
+    cursor: pointer;
+    font-size: 14px;
+    transition: color 0.2s;
+}
+
+.control-button:hover {
+    color: #ffffff;
+}
+
+/* Improve the play button */
+#play-pause {
+    background-color: #ffffff;
+    color: #000000;
+    border: none;
+    border-radius: 50%;
+    width: 32px;
+    height: 32px;
+    cursor: pointer;
+    transition: all 0.2s;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
+
+#play-pause:hover {
+    transform: scale(1.1);
+    background-color: #1DB954;
+}
+
+#play-pause i {
+    font-size: 14px;
+}
+
+/* Add hover effect to the progress bar */
+.progress:hover .progress-bar {
+    background-color: #1ed760;
+}
+
+.progress:hover::after {
+    content: '';
+    position: absolute;
+    right: -6px;
+    top: -4px;
+    width: 12px;
+    height: 12px;
+    background-color: #ffffff;
+    border-radius: 50%;
+    transform: translateX(-100%);
+}
+
+.progress {
+    width: 100%;
+    height: 4px;
+    background-color: #4f4f4f;
+    border-radius: 2px;
+    cursor: pointer;
+    position: relative;
+}
+
+.progress-container {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    width: 100%;
+    margin: 10px 0;
+}
+
+#current-time, #total-duration {
+    font-size: 12px;
+    color: #b3b3b3;
+    min-width: 45px;
+}
+
+.progress-bar {
+    height: 100%;
+    background-color: #1db954;
+    border-radius: 2px;
+    width: 0;
+    transition: width 0.1s linear;
+}
+
+/* Improve thumbnail handling */
+#current-thumbnail {
+    width: 60px;
+    height: 60px;
+}
+
+/* Add hover effect for progress bar */
+.progress:hover {
+    height: 6px;
+}
+
+.progress:hover .progress-bar {
+    background-color: #1ed760;
+} 
