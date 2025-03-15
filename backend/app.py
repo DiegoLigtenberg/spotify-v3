@@ -1,4 +1,4 @@
-from flask import Flask, jsonify, render_template, Response, stream_with_context, make_response, send_file, request
+from flask import Flask, jsonify, render_template, Response, stream_with_context, make_response, send_file, request, redirect
 from flask_cors import CORS
 import os
 from supabase import create_client, Client
@@ -165,6 +165,10 @@ def get_songs():
 @app.route('/api/stream/<song_id>')
 def stream_song(song_id):
     try:
+        # Remove any range-related portions from the song_id (like :1)
+        if ':' in song_id:
+            song_id = song_id.split(':')[0]
+            
         logger.info(f"Streaming request for song ID: {song_id}")
         
         # Fetch song data from Supabase
@@ -175,77 +179,107 @@ def stream_song(song_id):
             return jsonify({'error': 'Song not found'}), 404
             
         song_data = response.data[0]
-        logger.info(f"Found song data: {song_data}")
+        logger.info(f"Found song data: {song_data['title'] if 'title' in song_data else 'Unknown'}")
         
         if 'storage_path' not in song_data:
             logger.error("Missing storage_path in song data")
             return jsonify({'error': 'Invalid song data - missing storage path'}), 500
             
+        # Generate a pre-signed URL for the B2 object
+        storage_path = song_data['storage_path']
+        logger.info(f"Generating pre-signed URL for: {storage_path}")
+        
+        # Determine content type based on file extension
+        if storage_path.lower().endswith('.mp3'):
+            content_type = 'audio/mpeg'
+        elif storage_path.lower().endswith('.m4a'):
+            content_type = 'audio/mp4'
+        elif storage_path.lower().endswith('.aac'):
+            content_type = 'audio/aac'
+        else:
+            content_type = 'audio/mpeg'  # Default to MP3
+            
         try:
-            # Generate a pre-signed URL for the object
-            storage_path = song_data['storage_path']
-            logger.info(f"Generating pre-signed URL for: {storage_path}")
+            # Generate presigned URL with longer expiration
+            presigned_url = s3_client.generate_presigned_url(
+                'get_object',
+                Params={
+                    'Bucket': B2_BUCKET_NAME,
+                    'Key': storage_path
+                },
+                ExpiresIn=3600  # URL valid for 1 hour
+            )
+            logger.info(f"Successfully generated presigned URL")
             
-            try:
-                presigned_url = s3_client.generate_presigned_url(
-                    'get_object',
-                    Params={
-                        'Bucket': B2_BUCKET_NAME,
-                        'Key': storage_path
-                    },
-                    ExpiresIn=3600  # URL valid for 1 hour
-                )
-                logger.info(f"Generated pre-signed URL (first 100 chars): {presigned_url[:100]}...")
-                
-                # Test the URL directly
-                test_response = requests.get(presigned_url, stream=True)
-                if test_response.status_code != 200:
-                    logger.error(f"Pre-signed URL test failed with status {test_response.status_code}")
-                    logger.error(f"Response headers: {dict(test_response.headers)}")
-                    logger.error(f"Response text: {test_response.text}")
-                    return jsonify({'error': 'Failed to verify audio source'}), 500
-                else:
-                    logger.info("Pre-signed URL test successful")
-                test_response.close()
-                
-            except Exception as e:
-                logger.error(f"Failed to generate or test pre-signed URL: {str(e)}", exc_info=True)
-                return jsonify({'error': f'Failed to generate streaming URL: {str(e)}'}), 500
+            # Simple proxy approach - forward the request to B2 and stream the response back
+            # This avoids CORS issues entirely as the request comes from our server
             
-            # Create streaming response
+            # Forward the Range header if it exists
+            headers = {}
+            if 'Range' in request.headers:
+                headers['Range'] = request.headers['Range']
+                logger.info(f"Forwarding Range header: {headers['Range']}")
+            
+            # Make request to B2
+            logger.info(f"Making request to B2 for audio content")
+            b2_response = requests.get(presigned_url, headers=headers, stream=True)
+            
+            # Log response details
+            status_code = b2_response.status_code
+            response_headers = dict(b2_response.headers)
+            logger.info(f"B2 response status: {status_code}, headers: {response_headers}")
+            
+            # Create a Flask response that streams the content
             def generate():
-                try:
-                    stream_response = requests.get(presigned_url, stream=True)
-                    if stream_response.status_code != 200:
-                        logger.error(f"Streaming request failed with status {stream_response.status_code}")
-                        return
-                        
-                    for chunk in stream_response.iter_content(chunk_size=8192):
-                        if chunk:
-                            yield chunk
-                except Exception as e:
-                    logger.error(f"Error during streaming: {str(e)}", exc_info=True)
-                    raise
-                finally:
-                    stream_response.close()
-                            
-            response = Response(generate(), content_type='audio/mpeg')
-            response.headers.update({
-                'Accept-Ranges': 'bytes',
-                'Cache-Control': 'no-cache',
-                'Access-Control-Allow-Origin': '*'
+                for chunk in b2_response.iter_content(chunk_size=8192):
+                    if chunk:
+                        yield chunk
+            
+            # Create appropriate response based on whether it's a range request
+            if status_code == 206:  # Partial content for range requests
+                flask_response = Response(
+                    generate(),
+                    status=206,
+                    content_type=content_type
+                )
+                
+                # Copy necessary headers from B2 response
+                for header in ['Content-Range', 'Content-Length', 'Accept-Ranges']:
+                    if header in response_headers:
+                        flask_response.headers[header] = response_headers[header]
+            else:
+                # Full content response
+                flask_response = Response(
+                    generate(),
+                    content_type=content_type
+                )
+                
+                # Set Content-Length if available
+                if 'Content-Length' in response_headers:
+                    flask_response.headers['Content-Length'] = response_headers['Content-Length']
+                
+                flask_response.headers['Accept-Ranges'] = 'bytes'
+            
+            # Add common headers for better caching and CORS handling
+            flask_response.headers.update({
+                'Access-Control-Allow-Origin': '*',
+                'Access-Control-Allow-Methods': 'GET, OPTIONS',
+                'Access-Control-Allow-Headers': 'Range, Origin, X-Requested-With, Content-Type, Accept',
+                'Cache-Control': 'no-cache, no-store, must-revalidate',
+                'Pragma': 'no-cache',
+                'Expires': '0'
             })
             
-            logger.info("Successfully initiated audio stream")
-            return response
-                
+            logger.info(f"Successfully streaming audio content, content-type: {content_type}")
+            return flask_response
+            
         except Exception as e:
             logger.error(f"Error in streaming process: {str(e)}", exc_info=True)
             return jsonify({'error': f'Streaming error: {str(e)}'}), 500
             
     except Exception as e:
         logger.error(f"Error in stream_song endpoint: {str(e)}", exc_info=True)
-        return jsonify({'error': str(e)}), 500
+        return jsonify({'error': f'Server error: {str(e)}'}), 500
 
 @app.route('/api/thumbnail/<song_id>')
 def get_thumbnail(song_id):
@@ -314,6 +348,20 @@ def get_thumbnail(song_id):
     except Exception as e:
         logger.error(f"Error in get_thumbnail: {str(e)}")
         return jsonify({'error': str(e)}), 500
+
+@app.after_request
+def after_request(response):
+    # Allow all origins for now - you can restrict this in production
+    response.headers.add('Access-Control-Allow-Origin', '*')
+    response.headers.add('Access-Control-Allow-Headers', 'Content-Type,Authorization,Range')
+    response.headers.add('Access-Control-Allow-Methods', 'GET,PUT,POST,DELETE,OPTIONS')
+    return response
+
+@app.route('/api/stream/<song_id>', methods=['OPTIONS'])
+def stream_song_options(song_id):
+    # Handle OPTIONS preflight requests for CORS
+    response = jsonify({'status': 'ok'})
+    return response
 
 if __name__ == '__main__':
     app.run(debug=True) 

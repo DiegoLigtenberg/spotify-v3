@@ -24,6 +24,10 @@ class UIManager {
         this.onVolumeChange = null;
         this.onSearch = null;
 
+        this.isDragging = false;
+        this.pendingSeek = false;
+        this.dragPosition = 0;
+        this.lastProgressUpdate = 0; // Track last update time
         this.setupEventListeners();
     }
 
@@ -41,13 +45,26 @@ class UIManager {
             if (this.onNextClick) this.onNextClick();
         });
 
-        // Progress bar click handler
-        this.elements.progress.addEventListener('click', (e) => {
-            if (this.onProgressClick) {
-                const rect = this.elements.progress.getBoundingClientRect();
-                const clickPosition = (e.clientX - rect.left) / rect.width;
-                const normalizedPosition = Math.max(0, Math.min(1, clickPosition));
-                this.onProgressClick(normalizedPosition);
+        // Progress bar click and drag handlers
+        this.elements.progress.addEventListener('mousedown', (e) => {
+            this.isDragging = true;
+            this.pendingSeek = false;
+            // Store position but don't seek yet
+            this.updateDragPosition(e);
+        });
+
+        document.addEventListener('mousemove', (e) => {
+            if (this.isDragging) {
+                // Just update position during drag, don't seek
+                this.updateDragPosition(e);
+            }
+        });
+
+        document.addEventListener('mouseup', (e) => {
+            if (this.isDragging) {
+                // Only seek on mouse release
+                this.isDragging = false;
+                this.executeDragSeek();
             }
         });
 
@@ -69,6 +86,34 @@ class UIManager {
         });
     }
 
+    updateDragPosition(e) {
+        if (!this.elements.progress) return;
+        
+        const rect = this.elements.progress.getBoundingClientRect();
+        const clickX = e.clientX - rect.left;
+        this.dragPosition = Math.max(0, Math.min(1, clickX / rect.width));
+        
+        // Just update visual position during drag
+        this.elements.progressBar.style.width = `${this.dragPosition * 100}%`;
+        
+        console.log('Dragging progress:', {
+            position: this.dragPosition,
+            percentage: `${(this.dragPosition * 100).toFixed(2)}%`
+        });
+    }
+    
+    executeDragSeek() {
+        if (this.onProgressClick) {
+            console.log('Executing seek to position:', {
+                position: this.dragPosition,
+                percentage: `${(this.dragPosition * 100).toFixed(2)}%`
+            });
+            
+            this.onProgressClick(this.dragPosition);
+            this.pendingSeek = false;
+        }
+    }
+
     updatePlayPauseButton(isPlaying) {
         this.elements.playPauseButton.innerHTML = isPlaying ? 
             '<i class="fas fa-pause"></i>' : 
@@ -76,9 +121,30 @@ class UIManager {
     }
 
     updateProgress(currentTime, duration) {
-        if (isNaN(currentTime) || isNaN(duration)) return;
+        if (isNaN(currentTime) || isNaN(duration)) {
+            console.log('Invalid time values:', { currentTime, duration });
+            return;
+        }
+        
+        // Don't update UI while dragging
+        if (this.isDragging) {
+            return;
+        }
+        
+        // Avoid too frequent updates (debounce)
+        const now = Date.now();
+        if (now - this.lastProgressUpdate < 50) {
+            return;
+        }
+        this.lastProgressUpdate = now;
         
         const progressPercent = (currentTime / duration) * 100;
+        console.log('Updating progress:', {
+            currentTime: this.formatTime(currentTime),
+            duration: this.formatTime(duration),
+            progressPercent: `${progressPercent.toFixed(2)}%`
+        });
+
         this.elements.progressBar.style.width = `${progressPercent}%`;
         this.elements.currentTimeDisplay.textContent = this.formatTime(currentTime);
         this.elements.totalDurationDisplay.textContent = this.formatTime(duration);
@@ -123,6 +189,46 @@ class UIManager {
         const minutes = Math.floor(seconds / 60);
         seconds = Math.floor(seconds % 60);
         return `${minutes.toString().padStart(2, '0')}:${seconds.toString().padStart(2, '0')}`;
+    }
+
+    showNotification(message, type = 'info') {
+        // Remove any existing notifications
+        const existingNotification = document.querySelector('.notification');
+        if (existingNotification) {
+            existingNotification.remove();
+        }
+        
+        // Create notification element
+        const notification = document.createElement('div');
+        notification.className = `notification ${type}`;
+        notification.textContent = message;
+        
+        // Add to DOM
+        document.body.appendChild(notification);
+        
+        // Auto-hide after 5 seconds for non-error notifications
+        if (type !== 'error') {
+            setTimeout(() => {
+                notification.classList.add('hide');
+                setTimeout(() => notification.remove(), 500);
+            }, 5000);
+        } else {
+            // Add close button for errors
+            const closeButton = document.createElement('button');
+            closeButton.className = 'notification-close';
+            closeButton.innerHTML = '&times;';
+            closeButton.addEventListener('click', () => {
+                notification.classList.add('hide');
+                setTimeout(() => notification.remove(), 500);
+            });
+            notification.appendChild(closeButton);
+            
+            // Auto-hide errors after 10 seconds
+            setTimeout(() => {
+                notification.classList.add('hide');
+                setTimeout(() => notification.remove(), 500);
+            }, 10000);
+        }
     }
 }
 
