@@ -25,14 +25,14 @@ document.addEventListener('DOMContentLoaded', () => {
     const volumeControl = document.querySelector('.volume-slider');
     const volumeProgress = document.querySelector('.volume-progress');
 
-    let songs = [];
     let currentSong = null;
     let currentSongIndex = -1;
+    let songs = []; // All loaded songs
 
     // Constants for pagination
-    const MAX_SONGS = 30;  // Maximum songs to show at once
-    const PAGE_SIZE = 30;  // Number of songs to fetch per request
-    const BUFFER_SIZE = 5; // Number of songs to keep before and after current song
+    const VISIBLE_SONGS = 30;  // Total number of songs to keep in memory
+    const SONGS_PER_PAGE = 15; // Number of songs to fetch per request
+    const REMOVE_THRESHOLD = 15; // Number of songs to remove when sliding
 
     let currentOffset = 0;
     let hasMoreSongs = true;
@@ -84,38 +84,21 @@ document.addEventListener('DOMContentLoaded', () => {
         alert('Error playing the song. Please try again.');
     });
 
-    // Display songs in the container
-    function displaySongs(songsToDisplay) {
+    // Modified displaySongs function
+    function displaySongs(songsToDisplay, scrollPosition = 'maintain') {
         const container = document.querySelector('.songs-container');
-        container.innerHTML = ''; // Clear existing songs
+        const oldScrollTop = container.scrollTop;
         
+        // Clear container
+        container.innerHTML = '';
+        
+        // Display songs
         songsToDisplay.forEach(song => {
             const songElement = createSongElement(song);
             container.appendChild(songElement);
         });
         
-        // Update current song highlight if one is playing
-        if (currentSong) {
-            const currentElement = container.querySelector(`[data-song-id="${currentSong.id}"]`);
-            if (currentElement) {
-                currentElement.classList.add('playing');
-            }
-        }
-    }
-
-    // Display new songs (appends to existing content)
-    function displayNewSongs(newSongs) {
-        const container = document.querySelector('.songs-container');
-        const existingSongIds = new Set(Array.from(container.children).map(el => el.dataset.songId));
-        
-        newSongs.forEach(song => {
-            if (!existingSongIds.has(song.id)) {
-                const songElement = createSongElement(song);
-                container.appendChild(songElement);
-            }
-        });
-        
-        // Maintain current song highlight
+        // Update current song highlight
         if (currentSong) {
             const currentElement = container.querySelector(`[data-song-id="${currentSong.id}"]`);
             if (currentElement) {
@@ -313,15 +296,17 @@ document.addEventListener('DOMContentLoaded', () => {
         displaySongs(filteredSongs);
     });
 
-    // Modified fetchMoreSongs for infinite scroll
-    async function fetchMoreSongs() {
-        if (isLoading || !hasMoreSongs) return;
-
+    // Modified fetchMoreSongs function
+    async function fetchMoreSongs(direction = 'down') {
+        if (isLoading || (!hasMoreSongs && direction === 'down')) return;
+        
         try {
             isLoading = true;
-            console.log('Fetching more songs from offset:', currentOffset);
+            const fetchOffset = direction === 'down' ? currentOffset : Math.max(0, currentOffset - SONGS_PER_PAGE);
             
-            const response = await fetch(`/api/songs?offset=${currentOffset}&limit=${PAGE_SIZE}`);
+            console.log(`Fetching songs from offset: ${fetchOffset}, direction: ${direction}`);
+            
+            const response = await fetch(`/api/songs?offset=${fetchOffset}&limit=${SONGS_PER_PAGE}`);
             if (!response.ok) throw new Error(`HTTP error! status: ${response.status}`);
             const data = await response.json();
             
@@ -329,32 +314,29 @@ document.addEventListener('DOMContentLoaded', () => {
             hasMoreSongs = data.has_more;
             
             if (data.songs.length > 0) {
-                currentOffset += data.songs.length;
-                
-                // Add new songs while maintaining the MAX_SONGS limit
-                const existingSongIds = new Set(songs.map(s => s.id));
-                data.songs.forEach(song => {
-                    if (!existingSongIds.has(song.id)) {
-                        songs.push(song);
+                if (direction === 'down') {
+                    // Remove songs from the top if we exceed VISIBLE_SONGS
+                    if (songs.length >= VISIBLE_SONGS) {
+                        songs = songs.slice(REMOVE_THRESHOLD);
                     }
-                });
-
-                // Trim songs array to maintain MAX_SONGS limit
-                if (songs.length > MAX_SONGS) {
-                    if (currentSongIndex === -1) {
-                        // If no song is playing, just keep the most recent MAX_SONGS
-                        songs = songs.slice(-MAX_SONGS);
-                    } else {
-                        // Keep the current song in the middle with buffer on both sides
-                        const start = Math.max(0, currentSongIndex - Math.floor(MAX_SONGS / 2));
-                        songs = songs.slice(start, start + MAX_SONGS);
+                    // Add new songs to the end
+                    songs = [...songs, ...data.songs];
+                    currentOffset += data.songs.length;
+                } else {
+                    // Remove songs from the bottom if we exceed VISIBLE_SONGS
+                    if (songs.length >= VISIBLE_SONGS) {
+                        songs = songs.slice(0, -REMOVE_THRESHOLD);
                     }
+                    // Add new songs to the beginning
+                    songs = [...data.songs, ...songs];
+                    currentOffset = fetchOffset;
                 }
-
-                // Update display
-                displayNewSongs(data.songs);
+                
+                console.log(`Total songs in memory: ${songs.length}`);
+                // Display the songs
+                displaySongs(songs);
             }
-
+            
         } catch (error) {
             console.error('Error fetching songs:', error);
             alert('Error loading songs. Please try again.');
@@ -367,12 +349,12 @@ document.addEventListener('DOMContentLoaded', () => {
     async function loadSongsAroundIndex(index) {
         if (isLoading) return;
 
-        const startOffset = Math.max(0, index - BUFFER_SIZE);
-        const endOffset = index + BUFFER_SIZE;
+        const startOffset = Math.max(0, index - REMOVE_THRESHOLD);
+        const endOffset = index + REMOVE_THRESHOLD;
 
         try {
             isLoading = true;
-            const response = await fetch(`/api/songs?offset=${startOffset}&limit=${BUFFER_SIZE * 2 + 1}`);
+            const response = await fetch(`/api/songs?offset=${startOffset}&limit=${REMOVE_THRESHOLD * 2 + 1}`);
             if (!response.ok) throw new Error(`HTTP error! status: ${response.status}`);
             const data = await response.json();
             
@@ -388,10 +370,10 @@ document.addEventListener('DOMContentLoaded', () => {
             });
 
             // Keep current song in the middle with buffer on both sides
-            if (songs.length > MAX_SONGS) {
+            if (songs.length > VISIBLE_SONGS) {
                 const currentIndex = songs.findIndex(s => s.id === currentSong?.id);
-                const start = Math.max(0, currentIndex - Math.floor(MAX_SONGS / 2));
-                songs = songs.slice(start, start + MAX_SONGS);
+                const start = Math.max(0, currentIndex - Math.floor(VISIBLE_SONGS / 2));
+                songs = songs.slice(start, start + VISIBLE_SONGS);
             }
 
             // Update display
@@ -403,20 +385,63 @@ document.addEventListener('DOMContentLoaded', () => {
         }
     }
 
-    // Handle scrolling
+    // Simplified scroll handler
     function handleScroll() {
         const container = document.querySelector('.songs-container');
-        const scrollPercentage = (container.scrollTop + container.clientHeight) / container.scrollHeight * 100;
+        const scrollTop = container.scrollTop;
+        const scrollHeight = container.scrollHeight;
+        const clientHeight = container.clientHeight;
         
-        // Load more songs when user scrolls past 75% of the content
-        if (scrollPercentage > 75 && !isLoading && hasMoreSongs) {
-            fetchMoreSongs();
+        // Debug logging
+        console.log('Scroll Debug:', {
+            scrollTop,
+            clientHeight,
+            scrollHeight,
+            remainingScroll: scrollHeight - (scrollTop + clientHeight),
+            threshold: 100 // pixels from bottom
+        });
+
+        // Check if we're near the bottom (100px threshold)
+        if (scrollHeight - (scrollTop + clientHeight) < 100) {
+            console.log('Near bottom - Loading more songs!');
+            fetchMoreSongs('down');
+        }
+        
+        // Load previous songs when near top
+        if (scrollTop < 100 && currentOffset > VISIBLE_SONGS) {
+            console.log('Near top - Loading previous songs!');
+            fetchMoreSongs('up');
         }
     }
 
-    // Add scroll event listener
-    document.querySelector('.songs-container').addEventListener('scroll', handleScroll);
+    // Update scroll event listener with throttling
+    let scrollTimeout;
+    
+    // Debug - log initial container dimensions
+    console.log('Initial container dimensions:', {
+        scrollHeight: songsContainer.scrollHeight,
+        clientHeight: songsContainer.clientHeight,
+        offsetHeight: songsContainer.offsetHeight
+    });
+
+    songsContainer.addEventListener('scroll', (e) => {
+        // Immediate debug log for every scroll event
+        console.log('Raw scroll event detected');
+        
+        if (!scrollTimeout) {
+            scrollTimeout = setTimeout(() => {
+                console.log('Processing scroll event');
+                handleScroll();
+                scrollTimeout = null;
+            }, 150); // Throttle to once every 150ms
+        }
+    }, { passive: true });
+
+    // Also listen for wheel events as backup
+    songsContainer.addEventListener('wheel', (e) => {
+        console.log('Wheel event detected');
+    }, { passive: true });
 
     // Initial load
-    fetchMoreSongs();
+    fetchMoreSongs('down');
 }); 
