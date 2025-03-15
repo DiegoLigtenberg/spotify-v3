@@ -30,14 +30,16 @@ document.addEventListener('DOMContentLoaded', () => {
     let songs = []; // All loaded songs
 
     // Constants for pagination
-    const VISIBLE_SONGS = 30;  // Total number of songs to keep in memory
-    const SONGS_PER_PAGE = 15; // Number of songs to fetch per request
-    const REMOVE_THRESHOLD = 15; // Number of songs to remove when sliding
+    const TOTAL_SONGS = 70;        // Total songs to keep in memory
+    const VISIBLE_SONGS = 30;      // Number of songs visible in viewport
+    const LOAD_CHUNK = 20;         // Number of songs to load/remove at once
+    const SCROLL_THRESHOLD = 0.05;  // 5% threshold for triggering load
 
     let currentOffset = 0;
     let hasMoreSongs = true;
     let isLoading = false;
     let totalSongsCount = 0;
+    let loadCooldown = false;
 
     // Helper function to add event listeners
     function addAudioEventListener(event, listener) {
@@ -298,15 +300,17 @@ document.addEventListener('DOMContentLoaded', () => {
 
     // Modified fetchMoreSongs function
     async function fetchMoreSongs(direction = 'down') {
-        if (isLoading || (!hasMoreSongs && direction === 'down')) return;
+        if (isLoading || loadCooldown || (!hasMoreSongs && direction === 'down')) return;
         
         try {
             isLoading = true;
-            const fetchOffset = direction === 'down' ? currentOffset : Math.max(0, currentOffset - SONGS_PER_PAGE);
+            const fetchOffset = direction === 'down' ? 
+                currentOffset + songs.length : 
+                Math.max(0, currentOffset - LOAD_CHUNK);
             
-            console.log(`Fetching songs from offset: ${fetchOffset}, direction: ${direction}`);
+            console.log(`Fetching songs from offset: ${fetchOffset}, direction: ${direction}, current songs: ${songs.length}`);
             
-            const response = await fetch(`/api/songs?offset=${fetchOffset}&limit=${SONGS_PER_PAGE}`);
+            const response = await fetch(`/api/songs?offset=${fetchOffset}&limit=${LOAD_CHUNK}`);
             if (!response.ok) throw new Error(`HTTP error! status: ${response.status}`);
             const data = await response.json();
             
@@ -314,27 +318,51 @@ document.addEventListener('DOMContentLoaded', () => {
             hasMoreSongs = data.has_more;
             
             if (data.songs.length > 0) {
+                // Store current scroll info
+                const container = songsContainer;
+                const oldScrollTop = container.scrollTop;
+                const oldHeight = container.scrollHeight;
+                const oldClientHeight = container.clientHeight;
+                
                 if (direction === 'down') {
-                    // Remove songs from the top if we exceed VISIBLE_SONGS
-                    if (songs.length >= VISIBLE_SONGS) {
-                        songs = songs.slice(REMOVE_THRESHOLD);
+                    // Remove LOAD_CHUNK songs from the top if we exceed TOTAL_SONGS
+                    if (songs.length >= TOTAL_SONGS - LOAD_CHUNK) {
+                        songs = songs.slice(LOAD_CHUNK);
+                        currentOffset += LOAD_CHUNK;
                     }
                     // Add new songs to the end
                     songs = [...songs, ...data.songs];
-                    currentOffset += data.songs.length;
                 } else {
-                    // Remove songs from the bottom if we exceed VISIBLE_SONGS
-                    if (songs.length >= VISIBLE_SONGS) {
-                        songs = songs.slice(0, -REMOVE_THRESHOLD);
+                    // Remove LOAD_CHUNK songs from the bottom if we exceed TOTAL_SONGS
+                    if (songs.length >= TOTAL_SONGS - LOAD_CHUNK) {
+                        songs = songs.slice(0, -LOAD_CHUNK);
                     }
-                    // Add new songs to the beginning
+                    // Add new songs to the beginning and update offset
                     songs = [...data.songs, ...songs];
                     currentOffset = fetchOffset;
                 }
                 
-                console.log(`Total songs in memory: ${songs.length}`);
+                console.log(`After update - Total songs: ${songs.length}, Offset: ${currentOffset}`);
+                
                 // Display the songs
                 displaySongs(songs);
+
+                // Handle scroll position after content update
+                const newHeight = container.scrollHeight;
+                if (direction === 'up') {
+                    // When loading upward, maintain relative position to new content
+                    const heightDiff = newHeight - oldHeight;
+                    container.scrollTop = oldScrollTop + heightDiff;
+                } else {
+                    // When loading downward, maintain the same scroll position
+                    container.scrollTop = oldScrollTop;
+                }
+
+                // Set cooldown to prevent cascade loading
+                loadCooldown = true;
+                setTimeout(() => {
+                    loadCooldown = false;
+                }, 250); // 250ms cooldown
             }
             
         } catch (error) {
@@ -349,12 +377,12 @@ document.addEventListener('DOMContentLoaded', () => {
     async function loadSongsAroundIndex(index) {
         if (isLoading) return;
 
-        const startOffset = Math.max(0, index - REMOVE_THRESHOLD);
-        const endOffset = index + REMOVE_THRESHOLD;
+        const startOffset = Math.max(0, index - LOAD_CHUNK);
+        const endOffset = index + LOAD_CHUNK;
 
         try {
             isLoading = true;
-            const response = await fetch(`/api/songs?offset=${startOffset}&limit=${REMOVE_THRESHOLD * 2 + 1}`);
+            const response = await fetch(`/api/songs?offset=${startOffset}&limit=${LOAD_CHUNK * 2 + 1}`);
             if (!response.ok) throw new Error(`HTTP error! status: ${response.status}`);
             const data = await response.json();
             
@@ -385,30 +413,36 @@ document.addEventListener('DOMContentLoaded', () => {
         }
     }
 
-    // Simplified scroll handler
+    // Improved scroll handler
     function handleScroll() {
-        const container = document.querySelector('.songs-container');
+        if (loadCooldown) return;
+
+        const container = songsContainer;
         const scrollTop = container.scrollTop;
         const scrollHeight = container.scrollHeight;
         const clientHeight = container.clientHeight;
+        
+        // Calculate scroll percentages
+        const scrolledFromTop = scrollTop / scrollHeight;
+        const scrolledFromBottom = 1 - ((scrollTop + clientHeight) / scrollHeight);
         
         // Debug logging
         console.log('Scroll Debug:', {
             scrollTop,
             clientHeight,
             scrollHeight,
-            remainingScroll: scrollHeight - (scrollTop + clientHeight),
-            threshold: 100 // pixels from bottom
+            totalSongs: songs.length,
+            currentOffset,
+            scrolledFromTop: (scrolledFromTop * 100).toFixed(4) + '%',
+            scrolledFromBottom: (scrolledFromBottom * 100).toFixed(4) + '%',
+            threshold: (SCROLL_THRESHOLD * 100).toFixed(4) + '%'
         });
 
-        // Check if we're near the bottom (100px threshold)
-        if (scrollHeight - (scrollTop + clientHeight) < 100) {
+        // Load more songs when near the edges
+        if (scrolledFromBottom < SCROLL_THRESHOLD && !isLoading && hasMoreSongs) {
             console.log('Near bottom - Loading more songs!');
             fetchMoreSongs('down');
-        }
-        
-        // Load previous songs when near top
-        if (scrollTop < 100 && currentOffset > VISIBLE_SONGS) {
+        } else if (scrolledFromTop < SCROLL_THRESHOLD && !isLoading && currentOffset > 0) {
             console.log('Near top - Loading previous songs!');
             fetchMoreSongs('up');
         }
