@@ -479,7 +479,7 @@ class PlaylistManager {
         const likedSongsList = document.getElementById('liked-songs-list');
         const likedSongsCount = document.getElementById('liked-songs-count');
         
-        // Check if elements exist before using them
+        // Verify we have the elements
         if (!likedSongsList || !likedSongsCount) {
             console.warn('Liked songs list or count element not found', {
                 likedSongsList: !!likedSongsList,
@@ -497,7 +497,7 @@ class PlaylistManager {
         // Clear the list
         likedSongsList.innerHTML = '';
         
-        // Update count
+        // Update count text
         likedSongsCount.textContent = `${this.likedSongs.length} songs`;
         
         console.log(`Rendering ${this.likedSongs.length} liked songs`);
@@ -505,9 +505,15 @@ class PlaylistManager {
         // If no liked songs, show a message
         if (this.likedSongs.length === 0) {
             const emptyRow = document.createElement('tr');
-            emptyRow.className = 'empty-songs-row';
+            emptyRow.className = 'empty-row';
             emptyRow.innerHTML = '<td colspan="5" class="empty-message">No liked songs yet. Like a song to see it here!</td>';
             likedSongsList.appendChild(emptyRow);
+            
+            // Also ensure the like button is not active if there are no liked songs
+            if (this.likeButton) {
+                this._updateLikeButtonUI(false);
+            }
+            
             return;
         }
         
@@ -577,7 +583,7 @@ class PlaylistManager {
                 });
             }
             
-            // Add to playlist button event
+            // Add song to playlist button event
             const addToPlaylistBtn = row.querySelector('.add-to-playlist-btn');
             if (addToPlaylistBtn) {
                 addToPlaylistBtn.addEventListener('click', (e) => {
@@ -589,9 +595,25 @@ class PlaylistManager {
             likedSongsList.appendChild(row);
         });
         
+        // Update the like button state if current song is in the liked songs list
+        const currentSongElement = document.getElementById('current-song');
+        const currentArtistElement = document.getElementById('current-artist');
+        
+        if (currentSongElement && currentArtistElement && this.likeButton) {
+            const songTitle = currentSongElement.textContent;
+            const artistName = currentArtistElement.textContent;
+            
+            if (songTitle !== 'No track selected') {
+                const currentSongId = `${songTitle}-${artistName}`.replace(/[^\w]/g, '-').toLowerCase();
+                const isLiked = this._findSongIndex(currentSongId, songTitle, artistName) >= 0;
+                this._updateLikeButtonUI(isLiked);
+            }
+        }
+        
+        const view = document.getElementById('liked-view');
+        
         // Force refresh of the view to ensure all styles are applied
         setTimeout(() => {
-            const view = document.getElementById('liked-view');
             if (view) {
                 // This trick forces a DOM reflow
                 void view.offsetWidth;
@@ -745,15 +767,33 @@ class PlaylistManager {
         // Save changes to localStorage
         this._saveToStorage();
         
-        // Refresh liked songs view
+        // Always update the Liked Songs view, even if it's not active
         this._renderLikedSongs();
         
-        // Update the liked view if it's active
-        const likedView = document.getElementById('liked-view');
-        if (likedView && likedView.classList.contains('active')) {
-            console.log('Refreshing active liked songs view');
-            this.showView('liked');
-        }
+        // Update any song lists that might contain this song
+        this._updateSongLikeStateInLists(songId, !isCurrentlyLiked);
+    }
+    
+    // Add a new helper method to update song like state in all song lists
+    _updateSongLikeStateInLists(songId, isLiked) {
+        // Update heart icons in all song lists for this song
+        document.querySelectorAll('.song-row').forEach(row => {
+            // Check if this row represents the toggled song
+            const rowSongId = row.getAttribute('data-song-id');
+            if (rowSongId === songId) {
+                // Update heart icon
+                const heartIcon = row.querySelector('.heart-icon, .fa-heart');
+                if (heartIcon) {
+                    if (isLiked) {
+                        heartIcon.className = heartIcon.className.replace('far', 'fas');
+                        heartIcon.closest('button')?.classList.add('liked');
+                    } else {
+                        heartIcon.className = heartIcon.className.replace('fas', 'far');
+                        heartIcon.closest('button')?.classList.remove('liked');
+                    }
+                }
+            }
+        });
     }
     
     // Helper method to find a song in the liked songs array
@@ -790,16 +830,16 @@ class PlaylistManager {
             if (currentThumbnail) {
                 const currentSongId = this._extractSongId(currentThumbnail.src);
                 
-                if (currentSongId === songId) {
+                // Check if the unliked song is currently playing
+                if (currentSongId === songId || this._findSongIndex(songId, song.title, song.artist) !== -1) {
                     if (this.likeButton) {
-                        this.likeButton.classList.remove('liked');
-                        const icon = this.likeButton.querySelector('i');
-                        if (icon) {
-                            icon.className = 'far fa-heart';
-                        }
+                        this._updateLikeButtonUI(false);
                     }
                 }
             }
+            
+            // Update song in all lists
+            this._updateSongLikeStateInLists(songId, false);
             
             this._showNotification(`Removed "${song.title}" from Liked Songs`, 'info');
         }
