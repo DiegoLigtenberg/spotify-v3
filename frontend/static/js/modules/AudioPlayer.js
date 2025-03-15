@@ -134,7 +134,7 @@ class AudioPlayer {
         // Create a short silent sound to unlock audio playback
         try {
             const silentAudio = new Audio();
-            silentAudio.src = 'data:audio/mp3;base64,SUQzBAAAAAAAI1RTU0UAAAAPAAADTGF2ZjU4LjI5LjEwMAAAAAAAAAAAAAAA//tQAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAWGluZwAAAA8AAAACAAABIgD/////////////////////////////////////AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA';
+            silentAudio.src = 'data:audio/mp3;base64,SUQzBAAAAAAAI1RTU0UAAAAPAAADTGF2ZjU4LjI5LjEwMAAAAAAAAAAAAAAA//tQAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAWGluZwAAAA8AAAACAAABIgD/////////////////////////////////////AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA';
             silentAudio.setAttribute('preload', 'auto');
             silentAudio.load();
             await silentAudio.play();
@@ -572,7 +572,7 @@ class AudioPlayer {
 
     _tryAlternativeLoading(url, forceTryPlay = false) {
         return new Promise((resolve, reject) => {
-            console.log('Using alternative loading method with forceTryPlay =', forceTryPlay);
+            console.log('Trying alternative loading method after play error');
             
             // Create a completely new audio element
             const newAudio = document.createElement('audio');
@@ -624,6 +624,17 @@ class AudioPlayer {
                     return;
                 }
                 
+                // If this is a CORS error in production, try another fallback
+                if (window.location.hostname !== 'localhost' && 
+                    window.location.hostname !== '127.0.0.1' &&
+                    !forceTryPlay) {
+                    console.warn('CORS error in production environment, trying another fallback');
+                    
+                    // Try with a simpler approach - direct playback with no source elements
+                    this._tryDirectPlayback(url).then(resolve).catch(reject);
+                    return;
+                }
+                
                 // Report the error
                 this._triggerEvent('error', { 
                     error: new Error(`Failed to load audio: ${errorInfo}`)
@@ -634,8 +645,19 @@ class AudioPlayer {
             
             // Add a direct source without using source elements
             try {
+                // Extract the base URL without query parameters
+                let baseUrl = url;
+                if (baseUrl.includes('?')) {
+                    baseUrl = baseUrl.split('?')[0];
+                }
+                
+                // If it's a static audio file, make sure it has the .mp3 extension
+                if (baseUrl.includes('/static/audio/') && !baseUrl.endsWith('.mp3')) {
+                    baseUrl = `${baseUrl}.mp3`;
+                }
+                
                 // Add cache buster parameter and specify type=audio/mpeg
-                const modifiedUrl = `${url}&altmethod=true`;
+                const modifiedUrl = `${baseUrl}?altmethod=true&t=${Date.now()}`;
                 console.log('Alternative method using URL:', modifiedUrl);
                 
                 // For mobile devices, especially iOS, provide multiple formats
@@ -652,184 +674,175 @@ class AudioPlayer {
                     aacSource.type = 'audio/aac';
                     newAudio.appendChild(aacSource);
                 } else {
-                    // For desktop, just set the src directly
+                    // For desktop browsers, set src directly
                     newAudio.src = modifiedUrl;
                 }
                 
-                // Set up handling for metadata loading success
-                newAudio.onloadedmetadata = () => {
-                    console.log('Metadata loaded in alternative audio element, duration:', 
-                        this.formatTime(newAudio.duration));
+                // Don't immediately call play() as it might fail due to autoplay restrictions
+                // Instead, wait for the event to fire
+                newAudio.addEventListener('canplaythrough', async () => {
+                    console.log('Alternative audio is ready to play');
                     this.isLoaded = true;
                     
-                    // Check for iOS restrictions
-                    if (this.isIOS && !this.hasUserInteraction && forceTryPlay) {
-                        console.log('iOS detected, showing play button instead of auto-playing');
-                        const iosPlayButton = document.querySelector('.ios-play-button');
-                        if (iosPlayButton) {
-                            iosPlayButton.style.display = 'block';
-                        }
-                        resolve();
-                        return;
-                    }
+                    // Replace the main audio element entirely
+                    // First, pause the current one to prevent double playback
+                    this.audioElement.pause();
                     
-                    if (forceTryPlay && !this.isPlaying) {
-                        console.log('Force playing with alternative audio element');
-                        newAudio.play().then(() => {
-                            this.isPlaying = true;
-                            resolve();
-                        }).catch(e => {
-                            // Handle NotAllowedError specially for mobile
-                            if (this.isMobile && e.name === 'NotAllowedError') {
-                                console.log('Mobile autoplay restriction in play()');
-                                
-                                // Show iOS play button if on iOS
-                                if (this.isIOS) {
-                                    const iosPlayButton = document.querySelector('.ios-play-button');
-                                    if (iosPlayButton) {
-                                        iosPlayButton.style.display = 'block';
-                                    }
-                                }
-                                
-                                // Mark as loaded but not playing
-                                this.isLoaded = true;
-                                this.isPlaying = false;
-                                
-                                // Resolve without error for expected behavior
-                                resolve();
-                                return;
-                            }
-                            
-                            console.error('Failed to play with alternative method:', e);
-                            this._triggerEvent('error', { error: e });
-                            reject(e);
-                        });
-                    } else {
-                        resolve();
-                    }
-                };
-                
-                // Handle canplay as backup if metadata doesn't load
-                newAudio.oncanplay = () => {
-                    if (!this.isLoaded) {
-                        console.log('Can play event in alternative audio (metadata never loaded)');
-                        this.isLoaded = true;
-                        
-                        // Check for iOS restrictions
-                        if (this.isIOS && !this.hasUserInteraction && forceTryPlay) {
-                            console.log('iOS detected on canplay, showing play button instead of auto-playing');
-                            const iosPlayButton = document.querySelector('.ios-play-button');
-                            if (iosPlayButton) {
-                                iosPlayButton.style.display = 'block';
-                            }
-                            resolve();
-                            return;
-                        }
-                        
-                        if (forceTryPlay && !this.isPlaying) {
-                            newAudio.play().then(() => {
-                                this.isPlaying = true;
-                                resolve();
-                            }).catch(e => {
-                                // Handle NotAllowedError specially for mobile
-                                if (this.isMobile && e.name === 'NotAllowedError') {
-                                    console.log('Mobile autoplay restriction in canplay handler');
-                                    
-                                    // Show iOS play button if on iOS
-                                    if (this.isIOS) {
-                                        const iosPlayButton = document.querySelector('.ios-play-button');
-                                        if (iosPlayButton) {
-                                            iosPlayButton.style.display = 'block';
-                                        }
-                                    }
-                                    
-                                    // Mark as loaded but not playing
-                                    this.isLoaded = true;
-                                    this.isPlaying = false;
-                                    
-                                    // Resolve without error for expected behavior
-                                    resolve();
-                                    return;
-                                }
-                                
-                                console.error('Failed to play on canplay event:', e);
-                                reject(e);
-                            });
-                        } else {
-                            resolve();
-                        }
-                    }
-                };
-                
-                // Replace the audio element in the DOM
-                const parent = this.audioElement.parentNode;
-                if (parent) {
-                    parent.replaceChild(newAudio, this.audioElement);
+                    // Copy current volume
+                    newAudio.volume = this.audioElement.volume;
+                    
+                    // Replace events on the original audio element
+                    const oldElement = this.audioElement;
                     this.audioElement = newAudio;
-                    console.log('Replaced audio element with alternative version');
                     
-                    // Force load
-                    this.audioElement.load();
+                    // Replace in DOM
+                    if (oldElement.parentNode) {
+                        oldElement.parentNode.replaceChild(newAudio, oldElement);
+                    } else {
+                        document.body.appendChild(newAudio);
+                    }
                     
-                    // Set a failsafe timeout in case neither metadata nor canplay fire
-                    setTimeout(() => {
-                        if (!this.isLoaded) {
-                            console.log('Metadata/canplay events never fired, forcing continue');
-                            this.isLoaded = true;
-                            
-                            // Check for iOS restrictions for the timeout case
-                            if (this.isIOS && !this.hasUserInteraction && forceTryPlay) {
-                                console.log('iOS detected in timeout, showing play button');
-                                const iosPlayButton = document.querySelector('.ios-play-button');
-                                if (iosPlayButton) {
-                                    iosPlayButton.style.display = 'block';
-                                }
-                                resolve();
-                                return;
-                            }
-                            
-                            if (forceTryPlay && !this.isPlaying) {
-                                console.log('Last-resort playback attempt');
-                                this.audioElement.play().then(() => {
-                                    this.isPlaying = true;
-                                    resolve();
-                                }).catch(e => {
-                                    // Final attempt mobile handling
-                                    if (this.isMobile && e.name === 'NotAllowedError') {
-                                        console.log('Mobile autoplay restriction in timeout handler');
-                                        
-                                        // Show iOS play button if on iOS
-                                        if (this.isIOS) {
-                                            const iosPlayButton = document.querySelector('.ios-play-button');
-                                            if (iosPlayButton) {
-                                                iosPlayButton.style.display = 'block';
-                                            }
-                                        }
-                                        
-                                        // Mark as loaded but not playing
-                                        this.isLoaded = true;
-                                        this.isPlaying = false;
-                                        
-                                        // Resolve without error
-                                        resolve();
-                                        return;
-                                    }
-                                    
-                                    console.error('Final playback attempt failed:', e);
-                                    reject(e);
-                                });
-                            } else {
-                                resolve();
-                            }
+                    // Force play if requested
+                    if (forceTryPlay) {
+                        try {
+                            await newAudio.play();
+                            this.isPlaying = true;
+                            console.log('Successfully playing with alternative method');
+                            this._triggerEvent('play');
+                        } catch (playError) {
+                            console.error('Alternative play failed:', playError);
+                            this.isPlaying = false;
                         }
-                    }, 5000);
-                } else {
-                    reject(new Error('Could not find parent for audio element'));
-                }
+                    }
+                    
+                    resolve();
+                }, { once: true });
+                
+                // Still load the audio
+                newAudio.load();
+                
+                // Set a timeout for loading in case it hangs
+                setTimeout(() => {
+                    if (!this.isLoaded) {
+                        console.warn('Alternative loading timed out after 5 seconds');
+                        
+                        // Try one more approach if we're in production
+                        if (window.location.hostname !== 'localhost' && 
+                            window.location.hostname !== '127.0.0.1' &&
+                            !forceTryPlay) {
+                            this._tryDirectPlayback(url).then(resolve).catch(reject);
+                        } else {
+                            // Just resolve even though it failed
+                            this.isLoaded = true;
+                            resolve();
+                        }
+                    }
+                }, 5000);
             } catch (error) {
                 console.error('Error in alternative loading setup:', error);
                 reject(error);
             }
+        });
+    }
+
+    // Add a new method for the most direct playback possible
+    _tryDirectPlayback(url) {
+        return new Promise((resolve, reject) => {
+            console.log('Attempting direct playback as last resort');
+            
+            // Extract the song ID from the URL
+            let songId = null;
+            
+            // Try to match patterns like /api/stream/123456 or /static/audio/123456.mp3
+            const apiMatch = url.match(/\/api\/stream\/(\d+)/);
+            const staticMatch = url.match(/\/static\/audio\/(\d+)/);
+            
+            if (apiMatch && apiMatch[1]) {
+                songId = apiMatch[1];
+            } else if (staticMatch && staticMatch[1]) {
+                songId = staticMatch[1];
+            }
+            
+            if (!songId) {
+                console.error('Could not extract song ID from URL:', url);
+                reject(new Error('Invalid song URL format'));
+                return;
+            }
+            
+            // Try a different URL format that might work better in production
+            const directUrl = `/api/stream/${songId}?t=${Date.now()}&method=direct`;
+            console.log('Using direct playback URL:', directUrl);
+            
+            // Create a new audio element with minimal settings
+            const directAudio = document.createElement('audio');
+            directAudio.preload = 'auto';
+            directAudio.crossOrigin = 'anonymous';
+            directAudio.src = directUrl;
+            
+            // Set up minimal success/error handlers
+            directAudio.oncanplay = () => {
+                console.log('Direct playback method ready');
+                
+                // Replace the original audio element
+                this.audioElement.pause();
+                
+                // Copy current volume
+                directAudio.volume = this.audioElement.volume;
+                
+                // Set up events on the new element
+                directAudio.ontimeupdate = () => {
+                    this._triggerEvent('timeupdate', {
+                        currentTime: directAudio.currentTime,
+                        duration: directAudio.duration,
+                    });
+                };
+                
+                directAudio.onended = () => {
+                    this._triggerEvent('ended');
+                };
+                
+                // Replace in DOM or append
+                if (this.audioElement.parentNode) {
+                    this.audioElement.parentNode.replaceChild(directAudio, this.audioElement);
+                } else {
+                    document.body.appendChild(directAudio);
+                }
+                
+                this.audioElement = directAudio;
+                this.isLoaded = true;
+                
+                // Try to play immediately
+                directAudio.play().then(() => {
+                    this.isPlaying = true;
+                    this._triggerEvent('play');
+                    console.log('Direct playback successful');
+                    resolve();
+                }).catch(err => {
+                    console.error('Direct playback failed:', err);
+                    this.isPlaying = false;
+                    resolve(); // Still resolve to prevent further attempts
+                });
+            };
+            
+            directAudio.onerror = (e) => {
+                console.error('Direct playback error:', directAudio.error);
+                
+                // Even though it failed, mark as loaded to prevent further attempts
+                this.isLoaded = true;
+                resolve(); // Always resolve, we've tried our best
+            };
+            
+            // Start loading
+            directAudio.load();
+            
+            // Set timeout to ensure we don't hang
+            setTimeout(() => {
+                if (!this.isLoaded) {
+                    console.warn('Direct playback method timed out');
+                    this.isLoaded = true;
+                    resolve(); // Still resolve to prevent further attempts
+                }
+            }, 5000);
         });
     }
 

@@ -247,6 +247,28 @@ class MusicPlayer {
                 `/static/audio/sample.mp3` // Fallback to a default sample if needed
             ];
             
+            // Check if we're in a production environment (like Railway)
+            const isProduction = window.location.hostname !== 'localhost' && 
+                                window.location.hostname !== '127.0.0.1';
+            
+            // In production environments, prioritize the API endpoint which might be more reliable
+            if (isProduction) {
+                console.log('Production environment detected (possibly Railway), prioritizing API endpoint');
+                
+                // Try the API endpoint with a cache-busting parameter
+                try {
+                    const apiUrl = `/api/stream/${song.id}?t=${Date.now()}`;
+                    console.log('Attempting to play using API endpoint:', apiUrl);
+                    await this.audioPlayer.play(apiUrl);
+                    this.isPlaying = true;
+                    this.uiManager.updatePlayPauseButton(true);
+                    return;
+                } catch (apiError) {
+                    console.error('API endpoint play failed, will try fallbacks:', apiError);
+                    // Continue to fallbacks
+                }
+            }
+            
             let attempts = 0;
             const maxAttempts = streamEndpoints.length;
             let success = false;
@@ -257,56 +279,70 @@ class MusicPlayer {
                     attempts++;
                     
                     const songUrl = streamEndpoints[attempts - 1] + (attempts > 1 ? `?retry=${Date.now()}` : '');
-                        
-                    console.log(`Playing song: ${song.title} (attempt ${attempts}/${maxAttempts}) from ${songUrl}`);
                     
-                    // Add a timeout for loading the song
-                    const playPromise = this.audioPlayer.play(songUrl);
+                    console.log(`Attempt ${attempts}/${maxAttempts} with URL: ${songUrl}`);
                     
-                    // Use Promise.race to implement a timeout
-                    const timeoutPromise = new Promise((_, reject) => {
-                        setTimeout(() => reject(new Error('Playback timed out')), 10000);
-                    });
-                    
-                    await Promise.race([playPromise, timeoutPromise]);
-                    
-                    // If we get here, playback started successfully
+                    await this.audioPlayer.play(songUrl);
                     success = true;
+                    this.isPlaying = true;
+                    this.uiManager.updatePlayPauseButton(true);
                     
-                    // Update UI elements
-                    this.updateSongInfo(song);
-                    
-                    // Show success notification on retries
-                    if (attempts > 1) {
-                        this.uiManager.showNotification('Playback started successfully!', 'success');
-                    }
-                    
+                    console.log(`Successfully played song using endpoint ${attempts}`);
                 } catch (error) {
-                    console.error(`Attempt ${attempts} with URL ${streamEndpoints[attempts - 1]} failed:`, error);
+                    console.error(`Attempt ${attempts} with URL ${streamEndpoints[attempts-1]} failed:`, error.message);
                     lastError = error;
                     
-                    if (attempts >= maxAttempts) {
-                        // We've exhausted our retries
-                        this.uiManager.showNotification(
-                            `Failed to play song after ${maxAttempts} attempts. Please try again later.`, 
-                            'error'
-                        );
-                        throw lastError;
-                    } else {
-                        // Retry with different endpoint
-                        this.uiManager.showNotification(
-                            `Playback failed. Trying alternate source... (${attempts}/${maxAttempts})`, 
-                            'warning'
-                        );
-                        // Add a short delay before retry
-                        await new Promise(resolve => setTimeout(resolve, 1000));
+                    if (attempts === maxAttempts) {
+                        // All attempts failed, show a notification
+                        this.uiManager.showNotification('Failed to play song. Please try again later.', 'error');
+                        
+                        // Try one more approach - create an entirely new audio element
+                        try {
+                            console.log('Final attempt - trying with a direct audio element');
+                            const audioElement = document.createElement('audio');
+                            audioElement.src = `/api/stream/${song.id}?t=${Date.now()}&direct=true`;
+                            audioElement.volume = this.audioPlayer.volume;
+                            
+                            // Set up events
+                            audioElement.onplay = () => {
+                                this.isPlaying = true;
+                                this.uiManager.updatePlayPauseButton(true);
+                            };
+                            
+                            audioElement.onended = () => {
+                                this.playNext();
+                            };
+                            
+                            audioElement.ontimeupdate = () => {
+                                this.uiManager.updateProgress(
+                                    audioElement.currentTime, 
+                                    audioElement.duration
+                                );
+                            };
+                            
+                            // Try to play
+                            await audioElement.play();
+                            
+                            // If we get here, it worked!
+                            document.body.appendChild(audioElement);
+                            success = true;
+                            
+                            // Replace the main audio element
+                            const oldElement = this.audioPlayer.audioElement;
+                            this.audioPlayer.audioElement = audioElement;
+                            
+                            console.log('Direct audio element approach successful!');
+                        } catch (finalError) {
+                            console.error('Final direct approach also failed:', finalError);
+                            throw lastError; // Re-throw the last error to be caught by the outer try/catch
+                        }
                     }
                 }
             }
-            
         } catch (error) {
             console.error('Error in playSong:', error);
-            this.uiManager.showNotification('Failed to play song. Please try again.', 'error');
+            this.isPlaying = false;
+            this.uiManager.updatePlayPauseButton(false);
         }
     }
 
