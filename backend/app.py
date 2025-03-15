@@ -12,21 +12,39 @@ from PIL import Image
 from io import BytesIO
 import tempfile
 
-# Load environment variables
-load_dotenv()
+# Load environment variables only in development
+if os.path.exists('.env'):
+    load_dotenv()
 
 app = Flask(__name__, 
     static_folder='../frontend/static',
     template_folder='../frontend/templates'
 )
-CORS(app)
+
+# Configure CORS based on environment
+if os.getenv('RAILWAY_ENVIRONMENT'):
+    # In production, only allow requests from your Railway domain
+    CORS(app, resources={
+        r"/api/*": {
+            "origins": [
+                f"https://{os.getenv('RAILWAY_STATIC_URL')}",
+                os.getenv('RAILWAY_PUBLIC_DOMAIN', '*')
+            ]
+        }
+    })
+else:
+    # In development, allow all origins
+    CORS(app)
 
 # Configure logging
-logging.basicConfig(level=logging.INFO)
+logging.basicConfig(
+    level=logging.INFO,
+    format='%(asctime)s - %(name)s - %(levelname)s - %(message)s'
+)
 logger = logging.getLogger(__name__)
 
 # Create temp directory for converted images
-TEMP_DIR = os.path.join(os.path.dirname(__file__), 'temp')
+TEMP_DIR = os.path.join(tempfile.gettempdir(), 'music_player_temp')
 os.makedirs(TEMP_DIR, exist_ok=True)
 
 def convert_webp_to_png(webp_data):
@@ -298,4 +316,8 @@ def get_thumbnail(song_id):
         return jsonify({'error': str(e)}), 500
 
 if __name__ == '__main__':
-    app.run(debug=True) 
+    # Use production server when deployed
+    if os.getenv('RAILWAY_ENVIRONMENT'):
+        app.run(host='0.0.0.0', port=int(os.getenv('PORT', 5000)))
+    else:
+        app.run(debug=True) 
