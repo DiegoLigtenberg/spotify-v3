@@ -18,7 +18,21 @@ class UIManager {
             likeButton: document.getElementById('like-current-song'),
             shuffleButton: document.getElementById('shuffle'),
             sidebarLinks: document.querySelectorAll('.sidebar-nav-item'),
-            viewContainers: document.querySelectorAll('.view-container')
+            viewContainers: document.querySelectorAll('.view-container'),
+            
+            // Metadata panel elements
+            metadataPanel: document.getElementById('metadata-panel'),
+            metadataPanelClose: document.getElementById('metadata-panel-close'),
+            metadataPanelImg: document.getElementById('metadata-panel-img'),
+            metadataPanelTitle: document.getElementById('metadata-panel-title'),
+            metadataPanelArtist: document.getElementById('metadata-panel-artist'),
+            metadataPanelViews: document.getElementById('metadata-panel-views'),
+            metadataPanelLikes: document.getElementById('metadata-panel-likes'),
+            metadataPanelDuration: document.getElementById('metadata-panel-duration'),
+            metadataPanelDescription: document.getElementById('metadata-panel-description'),
+            metadataPanelDescriptionContainer: document.getElementById('metadata-panel-description-container'),
+            metadataPanelTags: document.getElementById('metadata-panel-tags'),
+            metadataPanelTagsContainer: document.getElementById('metadata-panel-tags-container')
         };
 
         // Initialize event handlers
@@ -32,6 +46,7 @@ class UIManager {
         this.onShuffleToggle = null;
         this.onLikeToggle = null;
         this.onViewChange = null;
+        this.onAlbumArtClick = null;
 
         this.isDragging = false;
         this.pendingSeek = false;
@@ -165,6 +180,39 @@ class UIManager {
                 }
             });
         }
+
+        // Album art click handler for metadata panel
+        if (this.elements.currentThumbnail) {
+            this.elements.currentThumbnail.addEventListener('click', () => {
+                if (this.onAlbumArtClick) this.onAlbumArtClick();
+            });
+        }
+        
+        // Metadata panel close button
+        if (this.elements.metadataPanelClose) {
+            this.elements.metadataPanelClose.addEventListener('click', () => {
+                this.hideMetadataPanel();
+            });
+        }
+        
+        // View More button for description
+        const viewMoreBtn = document.getElementById('metadata-panel-view-more');
+        if (viewMoreBtn) {
+            viewMoreBtn.addEventListener('click', (e) => {
+                e.stopPropagation(); // Prevent closing the panel
+                this._toggleDescriptionExpansion();
+            });
+        }
+        
+        // Close metadata panel when clicking outside
+        document.addEventListener('click', (e) => {
+            if (this.elements.metadataPanel && 
+                this.elements.metadataPanel.classList.contains('active') &&
+                !this.elements.metadataPanel.contains(e.target) && 
+                e.target !== this.elements.currentThumbnail) {
+                this.hideMetadataPanel();
+            }
+        });
     }
     
     // Add methods to manage the hover circle
@@ -368,6 +416,172 @@ class UIManager {
                 notification.remove();
             }, 300);
         }, 3000);
+    }
+
+    hideMetadataPanel() {
+        this.elements.metadataPanel.classList.remove('active');
+    }
+    
+    /**
+     * Display the metadata panel with song information
+     * @param {Object} metadata - The song metadata
+     */
+    showMetadataPanel(metadata) {
+        if (!metadata || !metadata.song) {
+            console.warn('Invalid metadata provided to showMetadataPanel');
+            return;
+        }
+        
+        const song = metadata.song;
+        const tags = metadata.tags || [];
+        
+        // Update image
+        if (this.elements.metadataPanelImg) {
+            this.elements.metadataPanelImg.src = `/api/thumbnail/${song.id}`;
+            this.elements.metadataPanelImg.alt = `${song.title} album art`;
+        }
+        
+        // Update title and artist
+        if (this.elements.metadataPanelTitle) {
+            const songTitle = song.title || 'Unknown Title';
+            this.elements.metadataPanelTitle.textContent = songTitle;
+            // Add title attribute for tooltip on hover
+            this.elements.metadataPanelTitle.setAttribute('title', songTitle);
+        }
+        
+        if (this.elements.metadataPanelArtist) {
+            const artistName = song.artist || 'Unknown Artist';
+            this.elements.metadataPanelArtist.textContent = artistName;
+            // Add title attribute for tooltip on hover
+            this.elements.metadataPanelArtist.setAttribute('title', artistName);
+        }
+        
+        // Update stats
+        if (this.elements.metadataPanelViews) {
+            this.elements.metadataPanelViews.textContent = this._formatNumber(song.view_count || 0);
+        }
+        
+        if (this.elements.metadataPanelLikes) {
+            this.elements.metadataPanelLikes.textContent = this._formatNumber(song.like_count || 0);
+        }
+        
+        if (this.elements.metadataPanelDuration) {
+            const durationSeconds = song.duration || 0;
+            this.elements.metadataPanelDuration.textContent = this._formatDuration(durationSeconds);
+        }
+        
+        // Update tags
+        if (this.elements.metadataPanelTags && this.elements.metadataPanelTagsContainer) {
+            this.elements.metadataPanelTags.innerHTML = '';
+            
+            if (tags.length > 0) {
+                tags.forEach(tag => {
+                    const tagElement = document.createElement('div');
+                    tagElement.className = 'metadata-panel-tag';
+                    tagElement.textContent = tag;
+                    this.elements.metadataPanelTags.appendChild(tagElement);
+                });
+                
+                this.elements.metadataPanelTagsContainer.style.display = 'block';
+            } else {
+                this.elements.metadataPanelTagsContainer.style.display = 'none';
+            }
+        }
+        
+        // Update description
+        if (this.elements.metadataPanelDescription && this.elements.metadataPanelDescriptionContainer) {
+            const viewMoreBtn = document.getElementById('metadata-panel-view-more');
+            const fadeDivider = document.querySelector('.metadata-panel-description-fade');
+            
+            if (song.description) {
+                // Format description: replace hashtags with styled spans
+                const formattedDescription = song.description.replace(
+                    /#(\w+)/g, 
+                    '<span class="metadata-hashtag">#$1</span>'
+                );
+                
+                // Reset the description element
+                this.elements.metadataPanelDescription.innerHTML = formattedDescription;
+                this.elements.metadataPanelDescription.classList.remove('expanded');
+                
+                // Reset fade and view more button
+                if (fadeDivider) fadeDivider.classList.remove('hidden');
+                if (viewMoreBtn) {
+                    viewMoreBtn.textContent = 'View More';
+                    viewMoreBtn.classList.remove('hidden');
+                }
+                
+                // Check if the description needs a "View More" button
+                const wordCount = song.description.split(/\s+/).length;
+                if (wordCount <= 50) {
+                    // Short description - hide the button and fade
+                    if (viewMoreBtn) viewMoreBtn.classList.add('hidden');
+                    if (fadeDivider) fadeDivider.classList.add('hidden');
+                    
+                    // Remove height restriction from description
+                    this.elements.metadataPanelDescription.classList.add('expanded');
+                }
+                
+                this.elements.metadataPanelDescriptionContainer.style.display = 'block';
+            } else {
+                this.elements.metadataPanelDescriptionContainer.style.display = 'none';
+            }
+        }
+        
+        // Show the panel
+        this.elements.metadataPanel.classList.add('active');
+    }
+    
+    /**
+     * Format a number for display (e.g., 1000 -> 1K)
+     * @param {number} num - The number to format
+     * @returns {string} The formatted number
+     */
+    _formatNumber(num) {
+        if (num < 1000) return num.toString();
+        if (num < 1000000) return Math.floor(num / 1000) + 'K';
+        return Math.floor(num / 1000000) + 'M';
+    }
+    
+    /**
+     * Format duration in seconds to MM:SS format
+     * @param {number} seconds - The duration in seconds
+     * @returns {string} The formatted duration
+     */
+    _formatDuration(seconds) {
+        seconds = Math.floor(seconds);
+        const minutes = Math.floor(seconds / 60);
+        seconds = seconds % 60;
+        return `${minutes}:${seconds.toString().padStart(2, '0')}`;
+    }
+
+    /**
+     * Toggle description expansion for the "View More" functionality
+     * @private
+     */
+    _toggleDescriptionExpansion() {
+        const descriptionEl = document.getElementById('metadata-panel-description');
+        const viewMoreBtn = document.getElementById('metadata-panel-view-more');
+        const fadeDivider = document.querySelector('.metadata-panel-description-fade');
+        
+        if (!descriptionEl || !viewMoreBtn) return;
+        
+        const isExpanded = descriptionEl.classList.contains('expanded');
+        
+        if (isExpanded) {
+            // Collapse
+            descriptionEl.classList.remove('expanded');
+            viewMoreBtn.textContent = 'View More';
+            if (fadeDivider) fadeDivider.classList.remove('hidden');
+            
+            // Scroll back to top of description
+            descriptionEl.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+        } else {
+            // Expand
+            descriptionEl.classList.add('expanded');
+            viewMoreBtn.textContent = 'Show Less';
+            if (fadeDivider) fadeDivider.classList.add('hidden');
+        }
     }
 }
 

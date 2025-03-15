@@ -391,6 +391,12 @@ class MusicPlayer {
             this.changeView(view);
         };
         
+        // Add album art click handler for metadata panel
+        this.uiManager.onAlbumArtClick = () => {
+            console.log('Album art clicked, showing metadata panel');
+            this.showSongMetadata();
+        };
+        
         this.uiManager.onProgressClick = (position) => {
             if (!this.currentSong || !this.audioPlayer.duration) return;
             
@@ -784,6 +790,38 @@ class MusicPlayer {
     changeView(view) {
         console.log('Changing to view:', view);
         this.uiManager.showView(view);
+    }
+
+    // Show song metadata panel
+    async showSongMetadata() {
+        if (!this.currentSong) {
+            console.warn('No current song to show metadata for');
+            return;
+        }
+        
+        try {
+            console.log(`Fetching metadata for song ID: ${this.currentSong.id}`);
+            
+            // Show loading state
+            this.uiManager.showNotification('Loading song details...', 'info');
+            
+            // Fetch metadata from API
+            const response = await fetch(`/api/song-metadata/${this.currentSong.id}`);
+            
+            if (!response.ok) {
+                throw new Error(`Failed to fetch metadata: ${response.status} ${response.statusText}`);
+            }
+            
+            const metadata = await response.json();
+            console.log('Received song metadata:', metadata);
+            
+            // Display metadata in UI
+            this.uiManager.showMetadataPanel(metadata);
+            
+        } catch (error) {
+            console.error('Error fetching song metadata:', error);
+            this.uiManager.showNotification('Error loading song details', 'error');
+        }
     }
 
     // Play a random song (for shuffle mode)

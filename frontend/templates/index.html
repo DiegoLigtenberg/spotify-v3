@@ -236,6 +236,46 @@
         </div>
     </template>
 
+    <!-- Song Metadata Panel -->
+    <div id="metadata-panel" class="metadata-panel">
+        <button id="metadata-panel-close" class="metadata-panel-close"><i class="fas fa-times"></i></button>
+        <div class="metadata-panel-header">
+            <img id="metadata-panel-img" class="metadata-panel-img" src="" alt="Album Art">
+            <div class="metadata-panel-title-container">
+                <h3 id="metadata-panel-title" class="metadata-panel-title">Song Title</h3>
+                <p id="metadata-panel-artist" class="metadata-panel-artist">Artist Name</p>
+            </div>
+        </div>
+        <div class="metadata-panel-stats">
+            <div class="metadata-panel-stat">
+                <div id="metadata-panel-views" class="metadata-panel-stat-value">0</div>
+                <div class="metadata-panel-stat-label">Plays</div>
+            </div>
+            <div class="metadata-panel-stat">
+                <div id="metadata-panel-likes" class="metadata-panel-stat-value">0</div>
+                <div class="metadata-panel-stat-label">Likes</div>
+            </div>
+            <div class="metadata-panel-stat">
+                <div id="metadata-panel-duration" class="metadata-panel-stat-value">0:00</div>
+                <div class="metadata-panel-stat-label">Duration</div>
+            </div>
+        </div>
+        <div id="metadata-panel-tags-container">
+            <h4>Tags</h4>
+            <div id="metadata-panel-tags" class="metadata-panel-tags">
+                <!-- Tags will be added here dynamically -->
+            </div>
+        </div>
+        <div id="metadata-panel-description-container">
+            <h4>Description</h4>
+            <div class="metadata-panel-description-wrapper">
+                <p id="metadata-panel-description" class="metadata-panel-description">No description available.</p>
+                <div class="metadata-panel-description-fade"></div>
+            </div>
+            <button id="metadata-panel-view-more" class="metadata-panel-view-more">View More</button>
+        </div>
+    </div>
+
     <script type="module" src="{{ url_for('static', filename='js/main.js') }}"></script>
 </body>
 </html> 

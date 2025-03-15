@@ -417,5 +417,49 @@ def client_logs():
         logger.error(f"Error processing client logs: {str(e)}")
         return jsonify({'status': 'error', 'message': str(e)}), 500
 
+@app.route('/api/song-metadata/<song_id>')
+def get_song_metadata(song_id):
+    """Endpoint to get detailed metadata for a song including tags"""
+    try:
+        logger.info(f"Fetching metadata for song ID: {song_id}")
+        
+        # Fetch song data from Supabase including view_count and like_count
+        song_response = supabase.table('songs').select('*').eq('id', song_id).execute()
+        
+        if not song_response.data:
+            logger.error(f"Song with ID {song_id} not found")
+            return jsonify({'error': 'Song not found'}), 404
+            
+        song_data = song_response.data[0]
+        
+        # Fetch tags for this song using a direct join query
+        # This works with the existing schema without needing a custom function
+        tags_query = supabase.from_('song_tags') \
+            .select('tags!inner(name)') \
+            .eq('song_id', song_id) \
+            .limit(3)
+            
+        tags_response = tags_query.execute()
+        
+        # Extract tag names from the nested structure
+        tags = []
+        if tags_response.data:
+            for item in tags_response.data:
+                if item.get('tags') and item['tags'].get('name'):
+                    tags.append(item['tags']['name'])
+        
+        logger.info(f"Found {len(tags)} tags for song {song_id}: {tags}")
+        
+        # Create response object
+        metadata = {
+            'song': song_data,
+            'tags': tags
+        }
+        
+        return jsonify(metadata)
+    except Exception as e:
+        logger.error(f"Error fetching song metadata: {str(e)}", exc_info=True)
+        return jsonify({'error': str(e)}), 500
+
 if __name__ == '__main__':
     app.run(debug=True) 
