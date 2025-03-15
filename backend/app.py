@@ -316,8 +316,4 @@ def get_thumbnail(song_id):
         return jsonify({'error': str(e)}), 500
 
 if __name__ == '__main__':
-    # Use production server when deployed
-    if os.getenv('RAILWAY_ENVIRONMENT'):
-        app.run(host='0.0.0.0', port=int(os.getenv('PORT', 5000)))
-    else:
-        app.run(debug=True) 
+    app.run(debug=True) 
