@@ -54,14 +54,46 @@ function initClient() {
 }
 
 /**
- * Get the Supabase client instance
- * @returns {Object|null} The Supabase client or null if not initialized
+ * Create and return a Supabase client instance
+ * @returns {SupabaseClient} The Supabase client
  */
 export function getClient() {
-    if (!supabaseClient) {
-        return initClient();
+    // Return existing client if available
+    if (supabaseClient) return supabaseClient;
+    
+    // Get Supabase URL and key from environment variables
+    const supabaseUrl = window.ENV.SUPABASE_URL;
+    const supabaseKey = window.ENV.SUPABASE_KEY;
+    
+    if (!supabaseUrl || !supabaseKey) {
+        console.error('Supabase URL or Key not set. Authentication will not work.');
+        return null;
     }
-    return supabaseClient;
+    
+    try {
+        // Get the current origin for proper auth redirects
+        const currentOrigin = window.APP_ORIGIN || window.location.origin;
+        
+        // Create Supabase client
+        const client = createClient(supabaseUrl, supabaseKey, {
+            auth: {
+                // Use the current origin for auth redirects
+                redirectTo: `${currentOrigin}/`,
+                persistSession: true,
+                autoRefreshToken: true,
+                detectSessionInUrl: true
+            }
+        });
+        
+        // Store client for future use
+        supabaseClient = client;
+        
+        console.log('Supabase client created with origin:', currentOrigin);
+        return client;
+    } catch (error) {
+        console.error('Error creating Supabase client:', error);
+        return null;
+    }
 }
 
 // Initialize the client when the module is loaded

@@ -85,10 +85,16 @@ export async function signIn(email, password) {
         console.log('Attempting to sign in with email/password...');
         const client = getClient();
         
+        // Get the current origin for redirect
+        const currentOrigin = window.APP_ORIGIN || window.location.origin;
+        console.log('Current origin for redirect:', currentOrigin);
+        
         // Use signInWithPassword for Supabase v2
         const { data, error } = await client.auth.signInWithPassword({
             email,
             password
+        }, {
+            redirectTo: `${currentOrigin}/`
         });
         
         if (error) {
@@ -98,19 +104,15 @@ export async function signIn(email, password) {
         
         if (!data || !data.session) {
             console.error('No session data returned from signIn');
-            throw new Error('Login failed: No session data');
+            throw new Error('Invalid response from authentication service');
         }
         
-        console.log('Sign in successful, saving session');
+        console.log('Sign in successful');
+        // Emit auth state change event
+        authStateChangeEmitter.emit('SIGNED_IN', data);
         
-        // Store session in localStorage for persistence
+        // Save session
         saveSession(data.session);
-        
-        // Small delay to ensure state is properly updated before UI changes
-        setTimeout(() => {
-            // Notify subscribers of auth state change
-            authStateChangeEmitter.emit('SIGNED_IN', data);
-        }, 100);
         
         return {
             user: data.user,
@@ -120,44 +122,49 @@ export async function signIn(email, password) {
         console.error('Error signing in:', error);
         return {
             user: null,
-            error: error || new Error('Login failed')
+            error
         };
     }
 }
 
 /**
- * Sign in with a third-party provider
- * @param {string} provider - Provider name (google, github, etc)
- * @returns {Promise<void>}
+ * Sign in with a third-party provider (Google, Facebook, etc.)
+ * @param {string} provider - Provider name: 'google', 'facebook', etc.
+ * @returns {Promise<{user: Object|null, error: Error|null}>}
  */
 export async function signInWithProvider(provider) {
     try {
+        console.log(`Attempting to sign in with ${provider}...`);
         const client = getClient();
         
-        // Use the correct redirect URL that matches what's in Google Console
-        // Do not specify redirectTo - let Supabase use its default callback
+        // Get the current origin for redirect
+        const currentOrigin = window.APP_ORIGIN || window.location.origin;
+        console.log('Current origin for redirect:', currentOrigin);
+        
         const { data, error } = await client.auth.signInWithOAuth({
-            provider: provider.toLowerCase()
-            // Remove the options to let Supabase handle the correct redirect
+            provider,
+            options: {
+                redirectTo: `${currentOrigin}/`
+            }
         });
         
-        if (error) {
-            // Extract useful information from Supabase error
-            console.error(`Provider auth error:`, error);
-            
-            if (error.message && error.message.includes('validation failed') && 
-                error.message.includes('not enabled')) {
-                throw new Error(`${provider} login is not enabled for this application`);
-            }
-            
-            throw error;
-        }
+        if (error) throw error;
         
-        // The browser will be redirected to the provider's site
-        return data;
+        // For OAuth we don't get immediate session data
+        // It will be handled by onAuthStateChange when the redirect happens
+        
+        return {
+            user: null,
+            error: null,
+            provider: provider
+        };
     } catch (error) {
         console.error(`Error signing in with ${provider}:`, error);
-        throw error;
+        return {
+            user: null,
+            error,
+            provider: provider
+        };
     }
 }
 
