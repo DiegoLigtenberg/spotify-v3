@@ -82,19 +82,35 @@ export async function signUp(email, password) {
  */
 export async function signIn(email, password) {
     try {
+        console.log('Attempting to sign in with email/password...');
         const client = getClient();
+        
+        // Use signInWithPassword for Supabase v2
         const { data, error } = await client.auth.signInWithPassword({
             email,
             password
         });
         
-        if (error) throw error;
+        if (error) {
+            console.error('Supabase auth error:', error.message);
+            throw error;
+        }
         
-        // Store session
+        if (!data || !data.session) {
+            console.error('No session data returned from signIn');
+            throw new Error('Login failed: No session data');
+        }
+        
+        console.log('Sign in successful, saving session');
+        
+        // Store session in localStorage for persistence
         saveSession(data.session);
         
-        // Notify subscribers
-        authStateChangeEmitter.emit('SIGNED_IN', data);
+        // Small delay to ensure state is properly updated before UI changes
+        setTimeout(() => {
+            // Notify subscribers of auth state change
+            authStateChangeEmitter.emit('SIGNED_IN', data);
+        }, 100);
         
         return {
             user: data.user,
@@ -104,7 +120,7 @@ export async function signIn(email, password) {
         console.error('Error signing in:', error);
         return {
             user: null,
-            error
+            error: error || new Error('Login failed')
         };
     }
 }

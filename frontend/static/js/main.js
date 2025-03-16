@@ -451,6 +451,9 @@ class MusicPlayer {
         this.audioPlayer.onEnded = () => this.handleEndEvent();
         this.audioPlayer.onError = (error) => this.handleErrorEvent(error);
         
+        // Add custom event for song changes
+        this.audioPlayer.eventListeners.songChanged = [];
+        
         // Initialize song list manager with elements and config
         this.songListContainer = document.querySelector('.songs-container');
         this.songListManager = new SongListManager(this.songListContainer, {
@@ -479,6 +482,55 @@ class MusicPlayer {
                 this.audioPlayer.currentTime,
                 this.audioPlayer.duration
             );
+        });
+
+        // Listen for song changed events to update like button state
+        this.audioPlayer.addEventListener('songChanged', (event) => {
+            if (event && event.songId) {
+                console.log('Song changed, updating like button state for song ID:', event.songId);
+                
+                // CRITICAL FIX: Force immediate like button update with every approach
+                console.log('Force updating like button state on songChanged event');
+                
+                // 1. Directly update like button state without delay
+                if (this.playlistManager && this.uiManager) {
+                    const isLiked = this.playlistManager.likedSongs.some(song => 
+                        song && song.id === event.songId
+                    );
+                    
+                    console.log('Song like status in songChanged event:', {
+                        id: event.songId,
+                        isLiked: isLiked
+                    });
+                    
+                    // Immediately update UI in current execution context
+                    this.uiManager.updateLikeButton(isLiked);
+                    
+                    // Update any song rows
+                    if (typeof this.playlistManager._updateSongLikeStateInLists === 'function') {
+                        this.playlistManager._updateSongLikeStateInLists(event.songId, isLiked);
+                    }
+                    
+                    // Also directly call the PlaylistManager's specific update method
+                    if (typeof this.playlistManager._updateLikeButtonState === 'function') {
+                        this.playlistManager._updateLikeButtonState(event.songId);
+                    }
+                }
+                
+                // 2. Also call updateLikeStatus as a backup async method
+                this.updateLikeStatus(event.songId);
+                
+                // 3. Add a delayed final check after any possible race conditions
+                setTimeout(() => {
+                    console.log('Final like button state check after songChanged event');
+                    if (this.playlistManager && this.uiManager) {
+                        const finalCheck = this.playlistManager.likedSongs.some(song => 
+                            song && song.id === event.songId
+                        );
+                        this.uiManager.updateLikeButton(finalCheck);
+                    }
+                }, 300);
+            }
         });
 
         this.audioPlayer.addEventListener('ended', () => {
@@ -924,8 +976,41 @@ class MusicPlayer {
             this.uiManager.updateCurrentSong(songToPlay);
             this.uiManager.showNotification('Loading song...', 'info');
             
-            // Check if song is liked and update heart icon
-            this.updateLikeStatus(songToPlay.id);
+            // CRITICAL FIX: Force update like button immediately with direct approach
+            // This uses a completely separate code path to ensure the button shows the correct state
+            if (songToPlay.id && this.playlistManager && this.uiManager) {
+                console.log('DIRECT LIKE CHECK: Checking if song is liked:', songToPlay.id);
+                
+                // First check by ID - direct from the source of truth (liked songs array)
+                const isLiked = this.playlistManager.likedSongs.some(song => 
+                    song && song.id === songToPlay.id
+                );
+                
+                console.log('DIRECT LIKE CHECK result:', {
+                    songId: songToPlay.id,
+                    isLiked: isLiked
+                });
+                
+                // Force UI update immediately - bypassing all other code paths
+                this.uiManager.updateLikeButton(isLiked);
+                
+                // Add a backup delayed update for extra reliability
+                setTimeout(() => {
+                    const isStillLiked = this.playlistManager.likedSongs.some(song => 
+                        song && song.id === songToPlay.id
+                    );
+                    console.log('BACKUP LIKE CHECK (after 100ms):', isStillLiked);
+                    this.uiManager.updateLikeButton(isStillLiked);
+                }, 100);
+            }
+            
+            // Previous code path remains as a backup
+            if (songToPlay.id) {
+                this.updateLikeStatus(songToPlay.id);
+                
+                // Trigger the songChanged event (will be handled if the audio doesn't load)
+                this.audioPlayer._fireEvent('songChanged', { songId: songToPlay.id });
+            }
             
             // Preload the thumbnail image to ensure it's ready
             if (songToPlay.id) {
@@ -1057,13 +1142,23 @@ class MusicPlayer {
 
     playPrevious() {
         if (this.currentSongIndex > 0) {
-            this.playSong(this.songListManager.songs[this.currentSongIndex - 1]);
+            const prevSong = this.songListManager.songs[this.currentSongIndex - 1];
+            if (prevSong && prevSong.id) {
+                // Update like status before playing the song
+                this.updateLikeStatus(prevSong.id);
+            }
+            this.playSong(prevSong);
         }
     }
 
     playNext() {
         if (this.currentSongIndex < this.songListManager.songs.length - 1) {
-            this.playSong(this.songListManager.songs[this.currentSongIndex + 1]);
+            const nextSong = this.songListManager.songs[this.currentSongIndex + 1];
+            if (nextSong && nextSong.id) {
+                // Update like status before playing the song
+                this.updateLikeStatus(nextSong.id);
+            }
+            this.playSong(nextSong);
         }
     }
 
@@ -1076,6 +1171,12 @@ class MusicPlayer {
         // Update UI elements
         this.uiManager.updateCurrentSong(song);
         this.uiManager.updatePlayPauseButton(true);
+        
+        // IMPORTANT: Always update the like button state whenever song info is updated
+        if (song.id) {
+            console.log('updateSongInfo: Updating like button state for song:', song.id);
+            this.updateLikeStatus(song.id);
+        }
         
         // Set the initial like state using our new method
         if (this.playlistManager) {
@@ -1154,7 +1255,10 @@ class MusicPlayer {
         
         try {
             // Check if we have a UI manager to update
-            if (!this.uiManager) return;
+            if (!this.uiManager) {
+                console.warn('Cannot update like status: UIManager not available');
+                return;
+            }
             
             console.log('Checking if song is liked:', {
                 id: songId
@@ -1170,8 +1274,15 @@ class MusicPlayer {
                 isLiked: isLiked
             });
             
-            // Update our UI
-            this.uiManager.updateLikeButton(isLiked);
+            // Update our UI - do this in a setTimeout to ensure it runs after any current execution
+            setTimeout(() => {
+                this.uiManager.updateLikeButton(isLiked);
+                
+                // Also update any song rows in the list view through the PlaylistManager
+                if (this.playlistManager && typeof this.playlistManager._updateSongLikeStateInLists === 'function') {
+                    this.playlistManager._updateSongLikeStateInLists(songId, isLiked);
+                }
+            }, 0);
         } catch (error) {
             console.error('Error updating like status:', error);
         }

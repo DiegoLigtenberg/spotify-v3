@@ -796,18 +796,47 @@ class PlaylistManager {
             return;
         }
         
-        // Check if the song is in the liked songs list
+        if (!songId) {
+            console.warn('Cannot update like button: No song ID provided');
+            return;
+        }
+        
+        // Check if the song is in the liked songs list - direct access to source of truth
         const isLiked = this.likedSongs.some(song => 
             song && song.id === songId
         );
         
-        console.log('Checking if song is liked:', {
+        console.log('PLAYLIST MANAGER: Checking if song is liked:', {
             id: songId,
-            isLiked: isLiked
+            isLiked: isLiked,
+            likedSongsCount: this.likedSongs.length
         });
         
-        // Update UI
+        // IMPORTANT: Multiple update approaches to ensure UI consistency
+        
+        // 1. Update our own UI
         this._updateLikeButtonUI(isLiked);
+        
+        // 2. Try to update the main player UI via UIManager
+        try {
+            if (window.musicPlayer && window.musicPlayer.uiManager) {
+                console.log('PLAYLIST MANAGER: Directly updating UIManager like button');
+                window.musicPlayer.uiManager.updateLikeButton(isLiked);
+            }
+        } catch (error) {
+            console.error('Error updating main UI like button:', error);
+        }
+        
+        // 3. Update any song rows in the list view
+        this._updateSongLikeStateInLists(songId, isLiked);
+        
+        // 4. Add a fallback update with timeout to catch any race conditions
+        setTimeout(() => {
+            this._updateLikeButtonUI(isLiked);
+            if (window.musicPlayer && window.musicPlayer.uiManager) {
+                window.musicPlayer.uiManager.updateLikeButton(isLiked);
+            }
+        }, 200);
     }
     
     /**
@@ -1502,30 +1531,37 @@ class PlaylistManager {
             }
         }
         
-        if (this.likedSongs && this.likedSongs.length > 0) {
-            for (const song of this.likedSongs) {
-                if (!song) continue;
-                
-                // Check by ID
-                if (songId && song.id === songId) {
-                    isLiked = true;
-                    break;
-                }
-                
-                // Check by title and artist
-                if (songTitle && artistName && 
-                    song.title === songTitle && 
-                    song.artist === artistName) {
-                    isLiked = true;
-                    break;
-                }
+        // First check by ID which is most reliable
+        if (songId && this.likedSongs && this.likedSongs.length > 0) {
+            isLiked = this.likedSongs.some(song => 
+                song && song.id === songId
+            );
+            
+            if (isLiked) {
+                console.log(`Song "${songTitle}" is liked (matched by ID: ${songId})`);
+            }
+        }
+        
+        // If not found by ID and we have title/artist, try that as fallback
+        if (!isLiked && songTitle && artistName && this.likedSongs && this.likedSongs.length > 0) {
+            isLiked = this.likedSongs.some(song => 
+                song && song.title === songTitle && song.artist === artistName
+            );
+            
+            if (isLiked) {
+                console.log(`Song "${songTitle}" is liked (matched by title/artist)`);
             }
         }
         
         console.log(`Song "${songTitle}" like status: ${isLiked}`);
         
-        // Update UI
+        // Always update UI immediately
         this._updateLikeButtonUI(isLiked);
+        
+        // Also update any song rows in the list view
+        if (songId) {
+            this._updateSongLikeStateInLists(songId, isLiked);
+        }
         
         return isLiked;
     }

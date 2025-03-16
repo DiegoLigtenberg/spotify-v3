@@ -313,13 +313,56 @@ class UIManager {
     
     // Update like button state
     updateLikeButton(isLiked) {
-        if (isLiked) {
-            this.elements.likeButton.classList.add('liked');
-            this.elements.likeButton.querySelector('i').className = 'fas fa-heart';
-        } else {
-            this.elements.likeButton.classList.remove('liked');
-            this.elements.likeButton.querySelector('i').className = 'far fa-heart';
+        const likeButton = this.elements.likeButton;
+        if (!likeButton) {
+            console.warn('Like button element not found in UIManager');
+            return;
         }
+
+        console.log(`UIManager: Updating like button to ${isLiked ? 'liked' : 'not liked'}`);
+        
+        // CRITICAL FIX: Force complete reconstruction of the like button
+        // This ensures no old state is preserved
+        const newLikeButton = likeButton.cloneNode(true);
+        const heartIcon = newLikeButton.querySelector('i');
+        
+        // Reset all classes first
+        newLikeButton.className = 'control-button';
+        
+        // Add the ID property
+        newLikeButton.id = 'like-current-song';
+        
+        // Reset the icon to default state
+        if (heartIcon) {
+            heartIcon.className = 'far fa-heart';
+        }
+        
+        // Now set the correct state
+        if (isLiked) {
+            newLikeButton.classList.add('liked');
+            if (heartIcon) {
+                heartIcon.className = 'fas fa-heart';
+            }
+        }
+        
+        // Replace the old button with the new one
+        if (likeButton.parentNode) {
+            // Store the old click handler
+            const oldClickHandler = this.onLikeToggle;
+            
+            // Replace the button
+            likeButton.parentNode.replaceChild(newLikeButton, likeButton);
+            
+            // Update our reference
+            this.elements.likeButton = newLikeButton;
+            
+            // Reattach event listener
+            newLikeButton.addEventListener('click', () => {
+                if (oldClickHandler) oldClickHandler();
+            });
+        }
+        
+        console.log(`UIManager: Like button completely reset and updated to: ${isLiked ? 'liked' : 'not liked'}`);
     }
 
     updateDragPosition(e) {

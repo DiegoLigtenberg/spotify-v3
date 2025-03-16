@@ -215,6 +215,7 @@
     align-items: center;
     justify-content: center;
     backdrop-filter: blur(10px);
+    transition: background-color 0.3s ease, backdrop-filter 0.3s ease;
 }
 
 .auth-modal.active {
@@ -230,6 +231,9 @@
     overflow: hidden;
     position: relative;
     animation: modalFadeIn 0.3s ease-out;
+    transition: transform 0.3s ease, opacity 0.3s ease;
+    transform: translateY(20px);
+    opacity: 0;
 }
 
 @keyframes modalFadeIn {
@@ -979,4 +983,84 @@
     position: relative;
     z-index: 2;
     background-color: #181818;
+}
+
+/* Auth loading indicator */
+.auth-loading-indicator {
+    position: fixed;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    background-color: rgba(0, 0, 0, 0.7);
+    display: flex;
+    flex-direction: column;
+    justify-content: center;
+    align-items: center;
+    z-index: 9999;
+    color: white;
+    opacity: 0;
+    animation: fadeIn 0.3s ease-in-out forwards;
+}
+
+.auth-loading-indicator .spinner {
+    width: 50px;
+    height: 50px;
+    border: 4px solid rgba(255, 255, 255, 0.3);
+    border-top: 4px solid #1DB954;
+    border-radius: 50%;
+    animation: spin 1s linear infinite;
+    margin-bottom: 16px;
+}
+
+.auth-loading-indicator p {
+    font-size: 18px;
+    font-weight: 500;
+    margin-top: 16px;
+}
+
+@keyframes spin {
+    0% { transform: rotate(0deg); }
+    100% { transform: rotate(360deg); }
+}
+
+@keyframes fadeIn {
+    from { opacity: 0; }
+    to { opacity: 1; }
+}
+
+/* Improve auth transitions */
+.logged-in-view, .logged-out-view {
+    transition: opacity 0.5s ease-in-out;
+}
+
+.auth-transition-fade-in {
+    opacity: 0;
+    animation: fadeIn 0.5s ease-in-out forwards;
+}
+
+.auth-transition-fade-out {
+    opacity: 1;
+    animation: fadeOut 0.5s ease-in-out forwards;
+}
+
+@keyframes fadeOut {
+    from { opacity: 1; }
+    to { opacity: 0; }
+}
+
+/* Smooth transition for auth modal */
+.auth-modal {
+    transition: background-color 0.3s ease, backdrop-filter 0.3s ease;
+}
+
+.auth-modal-content {
+    transition: transform 0.3s ease, opacity 0.3s ease;
+    transform: translateY(20px);
+    opacity: 0;
+}
+
+.auth-modal.active .auth-modal-content {
+    transform: translateY(0);
+    opacity: 1;
 } 

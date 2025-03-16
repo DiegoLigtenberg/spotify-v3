@@ -237,15 +237,44 @@ class AuthUI {
     
     /**
      * Check current authentication state and update UI
+     * @param {boolean} isInitialCheck - Whether this is the initial check on page load
      */
-    async checkAuthState() {
-        const user = await getCurrentUser();
-        if (user) {
-            this.updateUIForUser(user);
-            this.hideWelcomeScreen();
-        } else {
-            this.updateUIForLoggedOut();
-            this.showWelcomeScreen();
+    async checkAuthState(isInitialCheck = true) {
+        try {
+            const user = await getCurrentUser();
+            
+            if (user) {
+                // Hide any loading indicator that might be visible
+                this._hideLoadingIndicator();
+                
+                // If user is logged in, update UI accordingly
+                this.updateUIForUser(user);
+                this.hideAuthModal();
+                this.hideWelcomeScreen();
+                
+                // Only load liked songs on initial check to avoid duplication
+                if (isInitialCheck) {
+                    this.refreshUserLikedSongs();
+                }
+            } else {
+                // If this is not the initial check, it might be during a login attempt
+                // In that case, we don't want to show the welcome screen immediately
+                if (isInitialCheck) {
+                    this.updateUIForLoggedOut();
+                    this.showWelcomeScreen();
+                }
+            }
+        } catch (error) {
+            console.error('Error checking auth state:', error);
+            
+            // On error, ensure loading indicator is hidden
+            this._hideLoadingIndicator();
+            
+            // Only show welcome screen on initial check
+            if (isInitialCheck) {
+                this.updateUIForLoggedOut();
+                this.showWelcomeScreen();
+            }
         }
     }
     
@@ -258,9 +287,14 @@ class AuthUI {
         console.log('Auth state changed:', event);
         
         if (event === 'SIGNED_IN') {
+            // Don't show welcome screen during transition
+            this._hideLoadingIndicator();
             this.updateUIForUser(session.user);
             this.hideAuthModal();
             this.hideWelcomeScreen();
+            
+            // Use smooth transition for UI changes
+            this._smoothTransitionToLoggedIn();
             
             // Refresh the user's liked songs from the database
             this.refreshUserLikedSongs();
@@ -280,6 +314,36 @@ class AuthUI {
             
             // Clear any user-specific data
             this.clearUserData();
+        }
+    }
+    
+    /**
+     * Perform a smooth transition to logged in state
+     * @private
+     */
+    _smoothTransitionToLoggedIn() {
+        // Add any smooth transition effects here
+        // For example, fade in the logged-in view
+        const loggedInView = document.querySelector('.logged-in-view');
+        if (loggedInView) {
+            // First make sure it's displayed
+            loggedInView.style.display = 'block';
+            
+            // Then add a fade-in effect
+            loggedInView.style.opacity = '0';
+            loggedInView.style.transition = 'opacity 0.5s ease';
+            
+            // Force a reflow to ensure the transition applies
+            void loggedInView.offsetWidth;
+            
+            // Fade in
+            loggedInView.style.opacity = '1';
+        }
+        
+        // Ensure logged-out view is hidden
+        const loggedOutView = document.querySelector('.logged-out-view');
+        if (loggedOutView) {
+            loggedOutView.style.display = 'none';
         }
     }
     
@@ -473,19 +537,110 @@ class AuthUI {
             // Disable form while submitting
             this.setFormDisabled('login-form', true);
             
+            // Show a loading state on the button
+            const submitBtn = document.querySelector('#login-form .auth-submit-btn');
+            if (submitBtn) {
+                submitBtn.textContent = 'Logging in...';
+                submitBtn.disabled = true;
+            }
+            
+            // Hide the auth modal immediately before the actual login
+            // This prevents the modal from flashing after auth state changes
+            this.hideAuthModal();
+            
+            // Show a temporary loading indicator
+            this._showLoadingIndicator();
+            
             const { user, error } = await signIn(email, password);
             
             if (error) {
+                // Show the modal again if there's an error
+                this.showAuthModal('login');
                 errorEl.textContent = error.message || 'Login failed';
+                
+                // Restore the button
+                if (submitBtn) {
+                    submitBtn.textContent = 'Login';
+                    submitBtn.disabled = false;
+                }
             } else if (user) {
                 // Success - UI will be updated by the auth state listener
                 console.log('Login successful');
+                
+                // The modal is already hidden, and the auth state listener
+                // will handle showing the logged-in state
             }
         } catch (err) {
+            // Show the modal again on error
+            this.showAuthModal('login');
             errorEl.textContent = 'An unexpected error occurred';
             console.error('Login error:', err);
         } finally {
             this.setFormDisabled('login-form', false);
+            this._hideLoadingIndicator();
+        }
+    }
+    
+    /**
+     * Show a loading indicator
+     * @private
+     */
+    _showLoadingIndicator() {
+        // Create a loading indicator if it doesn't exist
+        let loader = document.getElementById('auth-loading-indicator');
+        if (!loader) {
+            loader = document.createElement('div');
+            loader.id = 'auth-loading-indicator';
+            loader.className = 'auth-loading-indicator';
+            loader.innerHTML = '<div class="spinner"></div><p>Logging in...</p>';
+            
+            // Style the loader
+            loader.style.position = 'fixed';
+            loader.style.top = '0';
+            loader.style.left = '0';
+            loader.style.width = '100%';
+            loader.style.height = '100%';
+            loader.style.backgroundColor = 'rgba(0, 0, 0, 0.5)';
+            loader.style.display = 'flex';
+            loader.style.flexDirection = 'column';
+            loader.style.justifyContent = 'center';
+            loader.style.alignItems = 'center';
+            loader.style.zIndex = '9999';
+            loader.style.color = 'white';
+            
+            // Style the spinner
+            const spinner = loader.querySelector('.spinner');
+            spinner.style.width = '40px';
+            spinner.style.height = '40px';
+            spinner.style.border = '4px solid rgba(255, 255, 255, 0.3)';
+            spinner.style.borderTop = '4px solid #1DB954'; // Spotify green
+            spinner.style.borderRadius = '50%';
+            spinner.style.animation = 'spin 1s linear infinite';
+            
+            // Add keyframes for the animation
+            const style = document.createElement('style');
+            style.textContent = `
+                @keyframes spin {
+                    0% { transform: rotate(0deg); }
+                    100% { transform: rotate(360deg); }
+                }
+            `;
+            document.head.appendChild(style);
+            
+            document.body.appendChild(loader);
+        } else {
+            loader.style.display = 'flex';
+        }
+    }
+    
+    /**
+     * Hide the loading indicator
+     * @private
+     */
+    _hideLoadingIndicator() {
+        const loader = document.getElementById('auth-loading-indicator');
+        if (loader) {
+            loader.style.display = 'none';
         }
     }
     
