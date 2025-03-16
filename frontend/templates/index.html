@@ -33,18 +33,16 @@
             if (hasAccessToken || hasError) {
                 console.log('Detected auth redirect with ' + (hasAccessToken ? 'access token' : 'error'));
                 
-                // Check if we're on the railway.app domain but without the expected callback path
-                if (window.location.origin.includes('railway.app') && 
-                    !window.location.pathname.includes('/auth/callback')) {
-                    
+                // Check if we need to redirect to the callback path
+                if (!window.location.pathname.includes('/auth/callback')) {
                     // Save the hash for manually processing later
                     localStorage.setItem('pendingAuthRedirect', window.location.hash);
-                    console.log('Stored auth redirect data from Railway domain');
+                    console.log('Stored auth redirect data for processing');
                     
-                    // Redirect to the proper URL if necessary
-                    const targetUrl = 'https://vibify.up.railway.app/auth/callback' + window.location.hash;
-                    console.log('Redirecting to proper callback URL:', targetUrl);
-                    window.location.href = targetUrl;
+                    // Create a dynamic callback URL using the current origin
+                    const callbackUrl = `${window.location.origin}/auth/callback${window.location.hash}`;
+                    console.log('Redirecting to callback URL:', callbackUrl);
+                    window.location.href = callbackUrl;
                     return;
                 }
                 

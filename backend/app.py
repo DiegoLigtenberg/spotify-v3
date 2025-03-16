@@ -864,5 +864,14 @@ def clear_liked_songs():
         logger.error(f"Error in clear_liked_songs: {str(e)}", exc_info=True)
         return jsonify({'success': False, 'error': str(e)}), 500
 
+@app.route('/auth/callback')
+def auth_callback():
+    """
+    Handle OAuth callback redirects from providers like Google
+    This route simply serves the index page where client-side JS will process the auth tokens
+    """
+    logger.info("Auth callback received, rendering index page to process tokens")
+    return render_template('index.html')
+
 if __name__ == '__main__':
     app.run(debug=True) 

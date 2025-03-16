@@ -24,20 +24,9 @@ function initClient() {
     console.log('Current origin for auth redirect:', currentOrigin);
     
     // Ensure the redirect URL includes the proper callback path
-    let redirectUrl = currentOrigin;
-    
-    // Add /auth/callback to the redirect URL if it's not already included
-    if (!redirectUrl.endsWith('/auth/callback')) {
-        // Check if we're on the production Railway domain
-        if (redirectUrl.includes('railway.app')) {
-            redirectUrl = 'https://vibify.up.railway.app/auth/callback';
-            console.log('Using production redirect URL:', redirectUrl);
-        } else {
-            // For local development or other environments
-            redirectUrl = `${currentOrigin}/auth/callback`;
-            console.log('Using generated redirect URL:', redirectUrl);
-        }
-    }
+    // Always use the current origin to handle both local and deployed environments
+    const redirectUrl = `${currentOrigin}/auth/callback`;
+    console.log('Using redirect URL:', redirectUrl);
     
     // Validate URL format
     const isValidUrl = (url) => {
