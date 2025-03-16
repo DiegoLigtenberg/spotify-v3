@@ -1063,4 +1063,90 @@
 .auth-modal.active .auth-modal-content {
     transform: translateY(0);
     opacity: 1;
+}
+
+/* Mobile responsiveness for auth screens */
+@media (max-width: 768px) {
+    .auth-modal-content {
+        width: 90%;
+        max-width: 100%;
+        padding: 20px;
+        margin: 0 auto;
+    }
+    
+    .auth-form-group {
+        margin-bottom: 15px;
+    }
+    
+    .auth-form-group input {
+        padding: 10px;
+        font-size: 16px; /* Prevent iOS zoom on input */
+    }
+    
+    .auth-submit-btn {
+        padding: 12px;
+        font-size: 16px;
+    }
+    
+    .auth-provider-btn {
+        padding: 12px;
+        font-size: 14px;
+    }
+    
+    .auth-tabs {
+        margin-bottom: 15px;
+    }
+    
+    .auth-tab-btn {
+        padding: 8px 12px;
+        font-size: 14px;
+    }
+    
+    /* Fix the welcome screen for mobile */
+    .welcome-container {
+        padding: 20px;
+        width: 100%;
+    }
+    
+    .welcome-features {
+        flex-direction: column;
+        gap: 20px;
+    }
+    
+    .welcome-feature {
+        width: 100%;
+    }
+    
+    .welcome-buttons {
+        flex-direction: column;
+        width: 100%;
+    }
+    
+    .welcome-button {
+        width: 100%;
+        margin: 5px 0;
+    }
+    
+    /* Fix for the auth modal position */
+    .auth-modal.active {
+        align-items: flex-start;
+        padding-top: 30px;
+        overflow-y: auto;
+    }
+}
+
+/* Fix iOS specific issues */
+@supports (-webkit-touch-callout: none) {
+    /* CSS specific to iOS devices */
+    .auth-form-group input,
+    .auth-submit-btn,
+    .auth-provider-btn {
+        /* Prevent iOS zoom on input */
+        font-size: 16px !important;
+    }
+    
+    /* Fix iOS scroll issues */
+    .auth-modal {
+        -webkit-overflow-scrolling: touch;
+    }
 } 

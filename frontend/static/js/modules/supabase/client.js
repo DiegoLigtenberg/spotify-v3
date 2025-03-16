@@ -19,6 +19,10 @@ function initClient() {
     
     console.log('Supabase config:', { url: url ? 'Set' : 'Not set', key: key ? 'Set' : 'Not set' });
     
+    // Get the current origin for redirect
+    const currentOrigin = window.location.origin;
+    console.log('Current origin for auth redirect:', currentOrigin);
+    
     // Validate URL format
     const isValidUrl = (url) => {
         try {
@@ -44,7 +48,19 @@ function initClient() {
             return null;
         }
         
-        supabaseClient = supabase.createClient(supabaseUrl, supabaseKey);
+        // Define options with the correct redirect URL
+        const options = {
+            auth: {
+                redirectTo: currentOrigin,
+                persistSession: true,
+                autoRefreshToken: true,
+                detectSessionInUrl: true
+            }
+        };
+        
+        console.log('Creating Supabase client with options:', options);
+        
+        supabaseClient = supabase.createClient(supabaseUrl, supabaseKey, options);
         console.log('Supabase client initialized successfully');
         return supabaseClient;
     } catch (error) {
@@ -54,46 +70,11 @@ function initClient() {
 }
 
 /**
- * Create and return a Supabase client instance
- * @returns {SupabaseClient} The Supabase client
+ * Get the Supabase client instance
+ * @returns {Object} The Supabase client
  */
 export function getClient() {
-    // Return existing client if available
-    if (supabaseClient) return supabaseClient;
-    
-    // Get Supabase URL and key from environment variables
-    const supabaseUrl = window.ENV.SUPABASE_URL;
-    const supabaseKey = window.ENV.SUPABASE_KEY;
-    
-    if (!supabaseUrl || !supabaseKey) {
-        console.error('Supabase URL or Key not set. Authentication will not work.');
-        return null;
-    }
-    
-    try {
-        // Get the current origin for proper auth redirects
-        const currentOrigin = window.APP_ORIGIN || window.location.origin;
-        
-        // Create Supabase client
-        const client = createClient(supabaseUrl, supabaseKey, {
-            auth: {
-                // Use the current origin for auth redirects
-                redirectTo: `${currentOrigin}/`,
-                persistSession: true,
-                autoRefreshToken: true,
-                detectSessionInUrl: true
-            }
-        });
-        
-        // Store client for future use
-        supabaseClient = client;
-        
-        console.log('Supabase client created with origin:', currentOrigin);
-        return client;
-    } catch (error) {
-        console.error('Error creating Supabase client:', error);
-        return null;
-    }
+    return initClient();
 }
 
 // Initialize the client when the module is loaded

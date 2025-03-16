@@ -85,16 +85,10 @@ export async function signIn(email, password) {
         console.log('Attempting to sign in with email/password...');
         const client = getClient();
         
-        // Get the current origin for redirect
-        const currentOrigin = window.APP_ORIGIN || window.location.origin;
-        console.log('Current origin for redirect:', currentOrigin);
-        
-        // Use signInWithPassword for Supabase v2
+        // Correctly structured Supabase v2 call - note the parameter order
         const { data, error } = await client.auth.signInWithPassword({
             email,
             password
-        }, {
-            redirectTo: `${currentOrigin}/`
         });
         
         if (error) {
@@ -137,14 +131,15 @@ export async function signInWithProvider(provider) {
         console.log(`Attempting to sign in with ${provider}...`);
         const client = getClient();
         
-        // Get the current origin for redirect
-        const currentOrigin = window.APP_ORIGIN || window.location.origin;
-        console.log('Current origin for redirect:', currentOrigin);
+        // Get the current origin - CRITICAL for mobile devices
+        const currentOrigin = window.location.origin;
+        console.log('Auth redirect URL:', currentOrigin);
         
+        // Ensure options are correctly formatted for Supabase v2
         const { data, error } = await client.auth.signInWithOAuth({
             provider,
             options: {
-                redirectTo: `${currentOrigin}/`
+                redirectTo: currentOrigin
             }
         });
         
@@ -152,6 +147,7 @@ export async function signInWithProvider(provider) {
         
         // For OAuth we don't get immediate session data
         // It will be handled by onAuthStateChange when the redirect happens
+        console.log('OAuth sign-in initiated, browser will redirect');
         
         return {
             user: null,

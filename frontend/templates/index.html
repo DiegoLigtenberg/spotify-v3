@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>Domus Music Player</title>
+    <title>Vibify</title>
     <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}">
     <link rel="stylesheet" href="{{ url_for('static', filename='css/auth.css') }}">
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css">
@@ -21,6 +21,42 @@
         
         // Add current origin (fixes mobile redirect issue)
         window.APP_ORIGIN = window.location.origin;
+    </script>
+    
+    <!-- Handle auth redirects for mobile devices -->
+    <script>
+        // Process auth redirects
+        function handleAuthRedirect() {
+            const hasAccessToken = window.location.hash.includes('access_token=');
+            const hasError = window.location.hash.includes('error=');
+            
+            if (hasAccessToken || hasError) {
+                console.log('Detected auth redirect with ' + (hasAccessToken ? 'access token' : 'error'));
+                
+                // If we're on a different origin than expected (like localhost on mobile)
+                if (window.location.hostname === 'localhost' || 
+                    window.location.hostname.includes('127.0.0.1')) {
+                    
+                    // Save the hash for manually processing later
+                    localStorage.setItem('pendingAuthRedirect', window.location.hash);
+                    console.log('Stored auth redirect data for processing');
+                    
+                    // If this is on mobile device where the local IP is needed
+                    const localIPMatch = document.referrer.match(/https?:\/\/([^:\/]+)/);
+                    if (localIPMatch && localIPMatch[1] !== 'localhost' && 
+                        !localIPMatch[1].includes('127.0.0.1')) {
+                        
+                        console.log('Redirecting to proper origin: ' + localIPMatch[0]);
+                        // Redirect to the proper local IP with the hash
+                        window.location.href = `${localIPMatch[0]}/#${window.location.hash.substring(1)}`;
+                        return;
+                    }
+                }
+            }
+        }
+        
+        // Run on page load
+        handleAuthRedirect();
     </script>
     
     <!-- Register Service Worker for better performance -->
@@ -44,7 +80,7 @@
         <!-- Sidebar -->
         <div class="sidebar">
             <div class="logo">
-                <h1>Domus Music Player</h1>
+                <h1>Vibify</h1>
             </div>
             <nav>
                 <ul>
