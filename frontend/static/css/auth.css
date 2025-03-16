@@ -899,8 +899,9 @@
 .user-menu {
     position: absolute;
     top: calc(100% + 8px);
-    left: 0;
-    width: 200px;
+    right: 0;
+    left: auto;
+    width: 190px;
     background-color: #181818;
     border-radius: 8px;
     box-shadow: 0 16px 24px rgba(0, 0, 0, 0.3);
@@ -930,11 +931,12 @@
     background-color: rgba(255, 255, 255, 0.1);
 }
 
-/* Improve the arrow styling */
+/* Improve the arrow styling - move to right side */
 .user-menu-arrow {
     position: absolute;
     top: -5px;
-    left: 24px;
+    right: 24px;
+    left: auto;
     width: 10px;
     height: 10px;
     background-color: #181818;

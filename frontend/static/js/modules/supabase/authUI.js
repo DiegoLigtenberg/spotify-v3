@@ -228,14 +228,7 @@ class AuthUI {
      */
     setupAuthStateListener() {
         onAuthStateChange((event, session) => {
-            if (event === 'SIGNED_IN') {
-                this.updateUIForUser(session.user);
-                this.hideAuthModal();
-                this.hideWelcomeScreen();
-            } else if (event === 'SIGNED_OUT') {
-                this.updateUIForLoggedOut();
-                this.showWelcomeScreen();
-            }
+            this.handleAuthStateChange(event, session);
         });
         
         // Check initial auth state
@@ -254,6 +247,102 @@ class AuthUI {
             this.updateUIForLoggedOut();
             this.showWelcomeScreen();
         }
+    }
+    
+    /**
+     * Handle auth state changes
+     * @param {string} event - Auth event name
+     * @param {object} session - Auth session data
+     */
+    handleAuthStateChange(event, session) {
+        console.log('Auth state changed:', event);
+        
+        if (event === 'SIGNED_IN') {
+            this.updateUIForUser(session.user);
+            this.hideAuthModal();
+            this.hideWelcomeScreen();
+            
+            // Refresh the user's liked songs from the database
+            this.refreshUserLikedSongs();
+            
+            // Notify parent container
+            if (typeof window.onAuthStateChange === 'function') {
+                window.onAuthStateChange(true, session);
+            }
+        } else if (event === 'SIGNED_OUT') {
+            this.updateUIForLoggedOut();
+            this.showWelcomeScreen();
+            
+            // Notify parent container
+            if (typeof window.onAuthStateChange === 'function') {
+                window.onAuthStateChange(false);
+            }
+            
+            // Clear any user-specific data
+            this.clearUserData();
+        }
+    }
+    
+    /**
+     * Refresh the user's liked songs from the database
+     */
+    refreshUserLikedSongs() {
+        if (window.app && window.app.playlistManager) {
+            console.log('Refreshing liked songs from database');
+            window.app.playlistManager._loadLikedSongsFromDatabase()
+                .catch(error => {
+                    console.error('Error refreshing liked songs:', error);
+                });
+        }
+    }
+    
+    /**
+     * Clear user-specific data when logging out
+     */
+    clearUserData() {
+        console.log('Clearing user data on logout');
+        
+        // Clear liked songs
+        if (window.app && window.app.playlistManager) {
+            console.log('Resetting liked songs array');
+            window.app.playlistManager.likedSongs = [];
+            window.app.playlistManager._saveToStorage();
+            window.app.playlistManager._renderLikedSongs();
+        } else if (window.playlistManager) {
+            console.log('Resetting liked songs via global playlistManager');
+            window.playlistManager.likedSongs = [];
+            window.playlistManager._saveToStorage();
+            window.playlistManager._renderLikedSongs();
+        }
+        
+        // Reset UI states that might show user-specific data
+        document.querySelectorAll('.heart-icon.fas, .fa-heart.fas').forEach(icon => {
+            icon.classList.remove('fas');
+            icon.classList.add('far');
+            const btn = icon.closest('button');
+            if (btn) btn.classList.remove('liked');
+        });
+        
+        // Clear any other user-specific data in localStorage
+        // But keep app preferences and settings
+        const keysToKeep = ['volume', 'theme', 'quality_preference'];
+        const keysToRemove = [];
+        
+        // Find keys that might contain user data
+        for (let i = 0; i < localStorage.length; i++) {
+            const key = localStorage.key(i);
+            if (key && !keysToKeep.includes(key) && 
+                (key.includes('liked') || key.includes('playlist') || 
+                key.includes('history') || key.includes('user'))) {
+                keysToRemove.push(key);
+            }
+        }
+        
+        // Remove identified keys
+        keysToRemove.forEach(key => {
+            console.log(`Removing localStorage key: ${key}`);
+            localStorage.removeItem(key);
+        });
     }
     
     /**
@@ -507,12 +596,41 @@ class AuthUI {
      */
     async handleLogout() {
         try {
+            // Stop any playing audio and clear current song before logging out
+            if (window.app) {
+                console.log('Stopping music completely before logout');
+                
+                // Reset the audio player state and clear all playback
+                if (window.app.audioPlayer) {
+                    // Remove event listeners first to prevent any auto-playing
+                    window.app.audioPlayer.removeAllEventListeners('ended');
+                    
+                    // Reset the player completely
+                    window.app.audioPlayer.reset();
+                }
+                
+                // Clear app state to prevent auto-play of next song
+                window.app.currentSong = null;
+                window.app.isPlaying = false;
+                
+                // Update UI to reflect stopped state
+                if (window.app.uiManager) {
+                    window.app.uiManager.updatePlayPauseButton(false);
+                }
+            }
+            
             const { error } = await signOut();
             if (error) {
                 console.error('Logout error:', error);
             } else {
                 // UI will be updated by the auth state listener
                 console.log('Logged out successfully');
+                
+                // Force reload the page to ensure clean state after a short delay
+                // This ensures the user sees the "logged out" message before reload
+                setTimeout(() => {
+                    window.location.reload();
+                }, 300);
             }
         } catch (err) {
             console.error('Logout error:', err);

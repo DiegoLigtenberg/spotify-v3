@@ -481,5 +481,252 @@ def get_song_metadata(song_id):
         logger.error(f"Error fetching song metadata: {str(e)}", exc_info=True)
         return jsonify({'error': str(e)}), 500
 
+@app.route('/api/like-song', methods=['POST'])
+def like_song():
+    """Add a song to the user's liked songs"""
+    try:
+        # Get the song ID from the request body
+        data = request.get_json()
+        if not data or 'songId' not in data:
+            logger.error("Missing songId in request")
+            return jsonify({'error': 'Missing songId parameter'}), 400
+            
+        song_id = data['songId']
+        logger.info(f"Adding song ID '{song_id}' to liked songs")
+        
+        # Get the user ID from the JWT token in the Authorization header
+        auth_header = request.headers.get('Authorization')
+        if not auth_header or not auth_header.startswith('Bearer '):
+            logger.error("Missing or invalid Authorization header")
+            return jsonify({'error': 'Authentication required'}), 401
+            
+        token = auth_header.split(' ')[1]
+        
+        # Verify the token with Supabase
+        try:
+            user = supabase.auth.get_user(token)
+            user_id = user.user.id
+            logger.info(f"User authenticated: {user_id}")
+        except Exception as e:
+            logger.error(f"Failed to authenticate user: {str(e)}")
+            return jsonify({'error': 'Invalid authentication token'}), 401
+        
+        # Check if the song exists
+        # First, try to find it by ID directly
+        numeric_id = None
+        if song_id.isdigit():
+            numeric_id = song_id
+        else:
+            # If it's not a numeric ID, try to find the song by title/artist components
+            # This handles the case where the frontend sends a title-based ID
+            logger.info(f"Song ID '{song_id}' is not numeric, attempting to find matching song")
+            
+            # Extract potential title/artist from the ID format: "title-artist"
+            parts = song_id.split('-')
+            if len(parts) > 1:
+                # Try to reconstruct potential title and artist for searching
+                potential_title_parts = []
+                for part in parts:
+                    if part and part != 'unknown' and part != 'artist':
+                        potential_title_parts.append(part)
+                
+                if potential_title_parts:
+                    # Join with wildcard for flexible matching
+                    search_term = '%'.join(potential_title_parts)
+                    search_term = f"%{search_term}%"
+                    
+                    logger.info(f"Searching for song with title like: {search_term}")
+                    
+                    # Search for song by title (case insensitive)
+                    try:
+                        song_search = supabase.table('songs').select('id, title').ilike('title', search_term).limit(1).execute()
+                        
+                        if song_search.data:
+                            numeric_id = song_search.data[0]['id']
+                            logger.info(f"Found matching song with ID: {numeric_id}")
+                        else:
+                            logger.warning(f"No matching song found for search term: {search_term}")
+                    except Exception as e:
+                        logger.error(f"Error searching for song: {str(e)}")
+                
+        # If we couldn't find a numeric ID, return an error
+        if not numeric_id:
+            logger.error(f"Song with ID '{song_id}' not found")
+            return jsonify({'error': 'Song not found'}), 404
+            
+        # Insert the liked song record
+        try:
+            liked_song = {
+                'user_id': user_id,
+                'song_id': numeric_id
+            }
+            
+            # Use upsert to handle case where it might already exist
+            result = supabase.table('liked_songs').upsert(liked_song).execute()
+            
+            if not result.data:
+                raise Exception("No data returned from database operation")
+                
+            logger.info(f"Successfully added song '{numeric_id}' to liked songs for user '{user_id}'")
+            return jsonify({'success': True, 'message': 'Song added to liked songs'})
+            
+        except Exception as e:
+            logger.error(f"Database error adding liked song: {str(e)}")
+            return jsonify({'error': f'Database error: {str(e)}'}), 500
+            
+    except Exception as e:
+        logger.error(f"Error adding song to liked songs: {str(e)}", exc_info=True)
+        return jsonify({'error': str(e)}), 500
+
+@app.route('/api/unlike-song', methods=['POST'])
+def unlike_song():
+    """Remove a song from the user's liked songs"""
+    try:
+        # Get the song ID from the request body
+        data = request.get_json()
+        if not data or 'songId' not in data:
+            logger.error("Missing songId in request")
+            return jsonify({'error': 'Missing songId parameter'}), 400
+            
+        song_id = data['songId']
+        logger.info(f"Removing song ID '{song_id}' from liked songs")
+        
+        # Get the user ID from the JWT token in the Authorization header
+        auth_header = request.headers.get('Authorization')
+        if not auth_header or not auth_header.startswith('Bearer '):
+            logger.error("Missing or invalid Authorization header")
+            return jsonify({'error': 'Authentication required'}), 401
+            
+        token = auth_header.split(' ')[1]
+        
+        # Verify the token with Supabase
+        try:
+            user = supabase.auth.get_user(token)
+            user_id = user.user.id
+            logger.info(f"User authenticated: {user_id}")
+        except Exception as e:
+            logger.error(f"Failed to authenticate user: {str(e)}")
+            return jsonify({'error': 'Invalid authentication token'}), 401
+        
+        # If it's not a numeric ID, try to find the song by title/artist components
+        numeric_id = None
+        if song_id.isdigit():
+            numeric_id = song_id
+        else:
+            # This handles the case where the frontend sends a title-based ID
+            logger.info(f"Song ID '{song_id}' is not numeric, attempting to find matching song")
+            
+            # Extract potential title/artist from the ID format: "title-artist"
+            parts = song_id.split('-')
+            if len(parts) > 1:
+                # Try to reconstruct potential title and artist for searching
+                potential_title_parts = []
+                for part in parts:
+                    if part and part != 'unknown' and part != 'artist':
+                        potential_title_parts.append(part)
+                
+                if potential_title_parts:
+                    # Join with wildcard for flexible matching
+                    search_term = '%'.join(potential_title_parts)
+                    search_term = f"%{search_term}%"
+                    
+                    logger.info(f"Searching for song with title like: {search_term}")
+                    
+                    # Search for song by title (case insensitive)
+                    try:
+                        song_search = supabase.table('songs').select('id, title').ilike('title', search_term).limit(1).execute()
+                        
+                        if song_search.data:
+                            numeric_id = song_search.data[0]['id']
+                            logger.info(f"Found matching song with ID: {numeric_id}")
+                        else:
+                            logger.warning(f"No matching song found for search term: {search_term}")
+                    except Exception as e:
+                        logger.error(f"Error searching for song: {str(e)}")
+            
+        # Delete the liked song record - even if we couldn't find a match, attempt to remove by the original ID
+        # This way we clean up any potential mismatches
+        try:
+            if numeric_id:
+                # If we found a numeric ID, use that
+                result = supabase.table('liked_songs') \
+                    .delete() \
+                    .eq('user_id', user_id) \
+                    .eq('song_id', numeric_id) \
+                    .execute()
+            else:
+                # If we couldn't find a numeric ID, try with the original ID
+                # This is a fallback for edge cases
+                result = supabase.table('liked_songs') \
+                    .delete() \
+                    .eq('user_id', user_id) \
+                    .eq('song_id', song_id) \
+                    .execute()
+                
+            logger.info(f"Successfully removed song '{numeric_id or song_id}' from liked songs for user '{user_id}'")
+            return jsonify({'success': True, 'message': 'Song removed from liked songs'})
+            
+        except Exception as e:
+            logger.error(f"Database error removing liked song: {str(e)}")
+            return jsonify({'error': f'Database error: {str(e)}'}), 500
+            
+    except Exception as e:
+        logger.error(f"Error removing song from liked songs: {str(e)}", exc_info=True)
+        return jsonify({'error': str(e)}), 500
+
+@app.route('/api/liked-songs')
+def get_liked_songs():
+    """Get all songs liked by the current user"""
+    try:
+        # Get the user ID from the JWT token in the Authorization header
+        auth_header = request.headers.get('Authorization')
+        if not auth_header or not auth_header.startswith('Bearer '):
+            logger.error("Missing or invalid Authorization header")
+            return jsonify({'error': 'Authentication required'}), 401
+            
+        token = auth_header.split(' ')[1]
+        
+        # Verify the token with Supabase
+        try:
+            user = supabase.auth.get_user(token)
+            user_id = user.user.id
+            logger.info(f"User authenticated: {user_id}")
+        except Exception as e:
+            logger.error(f"Failed to authenticate user: {str(e)}")
+            return jsonify({'error': 'Invalid authentication token'}), 401
+        
+        # Query for the user's liked songs with song details
+        try:
+            # First get the liked song IDs
+            liked_songs_response = supabase.table('liked_songs') \
+                .select('song_id') \
+                .eq('user_id', user_id) \
+                .execute()
+                
+            if not liked_songs_response.data:
+                logger.info(f"No liked songs found for user {user_id}")
+                return jsonify({'songs': []})
+                
+            # Extract song IDs
+            song_ids = [item['song_id'] for item in liked_songs_response.data]
+            
+            # Get the full song details
+            songs_response = supabase.table('songs') \
+                .select('*') \
+                .in_('id', song_ids) \
+                .execute()
+                
+            logger.info(f"Found {len(songs_response.data)} liked songs for user {user_id}")
+            
+            return jsonify({'songs': songs_response.data})
+            
+        except Exception as e:
+            logger.error(f"Database error fetching liked songs: {str(e)}")
+            return jsonify({'error': f'Database error: {str(e)}'}), 500
+            
+    except Exception as e:
+        logger.error(f"Error fetching liked songs: {str(e)}", exc_info=True)
+        return jsonify({'error': str(e)}), 500
+
 if __name__ == '__main__':
     app.run(debug=True) 

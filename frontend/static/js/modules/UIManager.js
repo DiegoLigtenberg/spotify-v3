@@ -14,6 +14,7 @@ class UIManager {
             currentThumbnail: document.getElementById('current-thumbnail'),
             volumeControl: document.querySelector('.volume-slider'),
             volumeProgress: document.querySelector('.volume-progress'),
+            volumeIcon: document.querySelector('.volume-control i'),
             repeatButton: document.getElementById('repeat') || document.getElementById('repeat-button'),
             likeButton: document.getElementById('like-current-song'),
             shuffleButton: document.getElementById('shuffle'),
@@ -52,6 +53,9 @@ class UIManager {
         this.pendingSeek = false;
         this.dragPosition = 0;
         this.lastProgressUpdate = 0; // Track last update time
+        this.isMuted = false;
+        this.lastVolume = 1.0; // Store last volume level before mute
+        this.isVolumeDragging = false;
         this.setupEventListeners();
     }
 
@@ -128,6 +132,11 @@ class UIManager {
                 // Just update position during drag, don't seek
                 this.updateDragPosition(e);
             }
+            
+            // Handle volume dragging
+            if (this.isVolumeDragging) {
+                this.updateVolumeFromEvent(e);
+            }
         });
 
         document.addEventListener('mouseup', (e) => {
@@ -136,19 +145,60 @@ class UIManager {
                 this.isDragging = false;
                 this.executeDragSeek();
             }
+            
+            // Handle volume drag end
+            if (this.isVolumeDragging) {
+                this.isVolumeDragging = false;
+            }
         });
 
-        // Volume control click handler
+        // Volume control click and drag handlers
         if (this.elements.volumeControl) {
+            // Click handler
             this.elements.volumeControl.addEventListener('click', (e) => {
                 if (this.onVolumeChange) {
                     const volumeWidth = this.elements.volumeControl.clientWidth;
                     const clickX = e.offsetX;
                     const volume = clickX / volumeWidth;
                     this.onVolumeChange(volume);
+                    
+                    // If we were muted, unmute when volume is changed
+                    if (this.isMuted) {
+                        this.toggleMute();
+                    }
                 }
             });
+            
+            // Mouse down for drag start
+            this.elements.volumeControl.addEventListener('mousedown', (e) => {
+                this.isVolumeDragging = true;
+                this.updateVolumeFromEvent(e);
+                
+                // Prevent text selection during drag
+                e.preventDefault();
+            });
+            
+            // Touch start for mobile
+            this.elements.volumeControl.addEventListener('touchstart', (e) => {
+                this.isVolumeDragging = true;
+                this.updateVolumeFromTouch(e);
+                
+                // Prevent scrolling during drag
+                e.preventDefault();
+            });
         }
+
+        // Document event listeners for drag operations
+        document.addEventListener('touchmove', (e) => {
+            if (this.isVolumeDragging) {
+                this.updateVolumeFromTouch(e);
+                e.preventDefault();
+            }
+        });
+        
+        document.addEventListener('touchend', () => {
+            this.isVolumeDragging = false;
+        });
 
         // Search input handler
         if (this.elements.searchInput) {
@@ -213,6 +263,13 @@ class UIManager {
                 this.hideMetadataPanel();
             }
         });
+
+        // Volume icon click handler to toggle mute
+        if (this.elements.volumeIcon) {
+            this.elements.volumeIcon.addEventListener('click', () => {
+                this.toggleMute();
+            });
+        }
     }
     
     // Add methods to manage the hover circle
@@ -331,6 +388,11 @@ class UIManager {
 
     updateVolume(volume) {
         this.elements.volumeProgress.style.width = `${volume * 100}%`;
+        
+        // Update volume icon if not explicitly muted
+        if (!this.isMuted) {
+            this.updateVolumeIcon(volume);
+        }
     }
 
     updateCurrentSong(song) {
@@ -338,7 +400,7 @@ class UIManager {
         this.elements.currentArtistElement.textContent = song.artist || 'Unknown Artist';
         this.elements.currentThumbnail.src = `/api/thumbnail/${song.id}`;
         this.elements.currentThumbnail.onerror = () => {
-            this.elements.currentThumbnail.src = '/static/images/default.png';
+            this.elements.currentThumbnail.src = '/static/images/placeholder.png';
         };
         document.title = `${song.title} - ${song.artist || 'Unknown Artist'}`;
     }
@@ -362,7 +424,7 @@ class UIManager {
                  ${!isPlaying ? `data-src="/api/thumbnail/${song.id}"` : ''}
                  alt="Album Art" 
                  loading="lazy"
-                 onerror="this.src='/static/images/default.png'">
+                 onerror="this.src='/static/images/placeholder.png'">
             <h3>${song.title}</h3>
             <p>${song.artist || 'Unknown Artist'}</p>
         `;
@@ -581,6 +643,88 @@ class UIManager {
             descriptionEl.classList.add('expanded');
             viewMoreBtn.textContent = 'Show Less';
             if (fadeDivider) fadeDivider.classList.add('hidden');
+        }
+    }
+
+    // Add methods for volume control
+    toggleMute() {
+        this.isMuted = !this.isMuted;
+        
+        if (this.isMuted) {
+            // Store current volume and set to 0
+            this.lastVolume = this.elements.volumeProgress.style.width ? 
+                parseFloat(this.elements.volumeProgress.style.width) / 100 : 1.0;
+            
+            // Update icon to muted state
+            this.elements.volumeIcon.className = 'fas fa-volume-mute';
+            
+            // Call the volume change handler with 0
+            if (this.onVolumeChange) {
+                this.onVolumeChange(0);
+            }
+        } else {
+            // Restore previous volume
+            const volumeToRestore = this.lastVolume || 0.5;
+            
+            // Update icon based on volume level
+            this.updateVolumeIcon(volumeToRestore);
+            
+            // Call the volume change handler with restored volume
+            if (this.onVolumeChange) {
+                this.onVolumeChange(volumeToRestore);
+            }
+        }
+    }
+
+    updateVolumeFromEvent(e) {
+        if (!this.elements.volumeControl || !this.onVolumeChange) return;
+        
+        const rect = this.elements.volumeControl.getBoundingClientRect();
+        let volume = (e.clientX - rect.left) / rect.width;
+        
+        // Clamp volume between 0 and 1
+        volume = Math.max(0, Math.min(1, volume));
+        
+        // Update volume
+        this.onVolumeChange(volume);
+        
+        // If we were muted, unmute when volume is changed
+        if (this.isMuted && volume > 0) {
+            this.isMuted = false;
+            this.updateVolumeIcon(volume);
+        }
+    }
+
+    updateVolumeFromTouch(e) {
+        if (!this.elements.volumeControl || !this.onVolumeChange) return;
+        
+        const rect = this.elements.volumeControl.getBoundingClientRect();
+        const touch = e.touches[0];
+        let volume = (touch.clientX - rect.left) / rect.width;
+        
+        // Clamp volume between 0 and 1
+        volume = Math.max(0, Math.min(1, volume));
+        
+        // Update volume
+        this.onVolumeChange(volume);
+        
+        // If we were muted, unmute when volume is changed
+        if (this.isMuted && volume > 0) {
+            this.isMuted = false;
+            this.updateVolumeIcon(volume);
+        }
+    }
+
+    updateVolumeIcon(volume) {
+        if (!this.elements.volumeIcon) return;
+        
+        // Update the volume icon based on the volume level
+        if (volume <= 0) {
+            this.elements.volumeIcon.className = 'fas fa-volume-mute';
+        } else if (volume < 0.5) {
+            this.elements.volumeIcon.className = 'fas fa-volume-down';
+        } else {
+            this.elements.volumeIcon.className = 'fas fa-volume-up';
         }
     }
 }

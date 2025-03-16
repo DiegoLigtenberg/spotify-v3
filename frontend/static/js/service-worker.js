@@ -10,7 +10,7 @@ const STATIC_ASSETS = [
   '/static/js/modules/PlaylistManager.js',
   '/static/js/modules/SongListManager.js',
   '/static/js/modules/UIManager.js',
-  '/static/images/default.png',
+  '/static/images/placeholder.png',
   '/static/images/placeholder.png'
 ];
 
@@ -130,7 +130,7 @@ self.addEventListener('fetch', event => {
             }).catch(error => {
               console.error('[Service Worker] Thumbnail fetch failed:', error);
               // Return default image for offline use
-              return caches.match('/static/images/default.png');
+              return caches.match('/static/images/placeholder.png');
             });
           });
         })
