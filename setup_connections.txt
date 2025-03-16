@@ -1,0 +1,44 @@
+# Main Platforms and Dependencies for Spotify Clone
+
+## External Services
+
+1. **Supabase**
+   - Purpose: Authentication, user management, and database for storing liked songs
+   - URL: https://supabase.com
+   - Integration: Used for JWT token auth and storing user data
+
+2. **Google Cloud Platform**
+   - Purpose: OAuth authentication
+   - URL: https://console.cloud.google.com
+   - Integration: Used for Google Sign-In authentication
+
+3. **Backblaze B2**
+   - Purpose: Object storage for audio files and thumbnails
+   - URL: https://www.backblaze.com/b2/cloud-storage.html
+   - Integration: Used to store and retrieve media files
+
+## Internal Services
+
+1. **Backend Server**
+   - Technology: Python Flask API
+   - Purpose: Serves API endpoints, manages authentication, streams media
+   - Location: /backend/app.py
+
+2. **Frontend Server**
+   - Technology: Static HTML/CSS/JS served via Python HTTP server
+   - Purpose: Serves the web application UI
+   - Location: /frontend/
+
+## Database
+
+- **Supabase PostgreSQL**
+  - Purpose: Stores user data, liked songs, playlists
+  - Schema includes: users, liked_songs, playlists, songs
+
+## API Endpoints
+
+- `/api/songs` - Get songs list
+- `/api/stream/{song_id}` - Stream audio
+- `/api/thumbnail/{song_id}` - Get song thumbnail
+- `/api/liked-songs` - Manage liked songs
+- `/api/song-metadata/{song_id}` - Get detailed song info
