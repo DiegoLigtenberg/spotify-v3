@@ -68,8 +68,8 @@
 }
 
 .user-email {
-    font-size: 14px;
-    color: white;
+    font-size: 13px;
+    color: #a7a7a7;
     white-space: nowrap;
     overflow: hidden;
     text-overflow: ellipsis;
@@ -653,8 +653,8 @@
 }
 
 .vibify-logo .bar:nth-child(9) {
-    height: 15px;
-    transform: translateX(36px) translateY(-15px);
+    height: 05px;
+    transform: translateX(26px) translateY(-25px);
     animation-delay: 0.5s;
 }
 
@@ -711,8 +711,8 @@
 }
 
 .vibify-logo .frequency-ring:nth-child(2) {
-    width: 60%;
-    height: 60%;
+    width: 80%;
+    height: 80%;
     border-top: 3px solid rgba(29, 185, 84, 0.6);
     border-bottom: 3px solid rgba(29, 185, 84, 0.6);
     border-left: 3px solid rgba(29, 185, 84, 0.2);
@@ -823,4 +823,158 @@
 
 .welcome-container .vibify-logo .music-symbol {
     transform: scale(1.4);
+}
+
+/* User Profile in Top-Right Corner - Spotify style */
+.user-profile-container {
+    position: absolute;
+    top: 16px;
+    right: 16px;
+    z-index: 100;
+}
+
+/* User Profile Button - More rounded to match Spotify */
+.user-profile-button {
+    background-color: #181818;
+    border: 0;
+    border-radius: 24px;
+    color: #fff;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    padding: 4px 12px 4px 4px;
+    position: relative;
+    transition: background-color 0.2s ease;
+}
+
+.user-profile-button:hover,
+.user-profile-button.active {
+    background-color: #282828;
+}
+
+.user-profile-button.hidden {
+    display: none;
+}
+
+.user-profile-button .user-avatar {
+    width: 28px;
+    height: 28px;
+    min-width: 28px;
+    border-radius: 50%;
+    background-color: #333;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    margin-right: 8px;
+}
+
+.user-profile-button .user-avatar i {
+    color: #b3b3b3;
+    font-size: 14px;
+}
+
+.user-profile-button .user-name {
+    font-size: 14px;
+    font-weight: 700;
+    white-space: nowrap;
+    max-width: 150px;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    margin-right: 8px;
+}
+
+.user-profile-button .dropdown-icon {
+    color: #b3b3b3;
+    font-size: 10px;
+    display: flex;
+    align-items: center;
+    transition: transform 0.2s;
+}
+
+.user-profile-button.active .dropdown-icon i {
+    transform: rotate(180deg);
+}
+
+/* User Menu Dropdown - Spotify style with rounded corners */
+.user-menu {
+    position: absolute;
+    top: calc(100% + 8px);
+    left: 0;
+    width: 200px;
+    background-color: #181818;
+    border-radius: 8px;
+    box-shadow: 0 16px 24px rgba(0, 0, 0, 0.3);
+    z-index: 1000;
+    overflow: hidden;
+    display: none;
+}
+
+.user-menu-header {
+    padding: 12px 16px;
+    border-bottom: 1px solid rgba(255, 255, 255, 0.07);
+    background-color: #181818;
+}
+
+.user-menu-item {
+    padding: 12px 16px;
+    display: flex;
+    align-items: center;
+    color: #fff;
+    font-size: 14px;
+    transition: background-color 0.2s;
+    cursor: pointer;
+    background-color: #181818;
+}
+
+.user-menu-item:hover {
+    background-color: rgba(255, 255, 255, 0.1);
+}
+
+/* Improve the arrow styling */
+.user-menu-arrow {
+    position: absolute;
+    top: -5px;
+    left: 24px;
+    width: 10px;
+    height: 10px;
+    background-color: #181818;
+    transform: rotate(45deg);
+    z-index: 1;
+    box-shadow: -3px -3px 5px rgba(0, 0, 0, 0.1);
+}
+
+.user-menu-content {
+    position: relative;
+    z-index: 2;
+    background-color: #181818;
+}
+
+.user-menu-items {
+    list-style: none;
+    padding: 0;
+    margin: 0;
+}
+
+.user-menu-item i {
+    margin-right: 12px;
+    font-size: 16px;
+    color: #a7a7a7;
+    width: 16px;
+    text-align: center;
+}
+
+.user-profile-button.active .user-menu {
+    display: block;
+    animation: menuFadeIn 0.2s ease-out;
+}
+
+@keyframes menuFadeIn {
+    from { opacity: 0; transform: translateY(-8px); }
+    to { opacity: 1; transform: translateY(0); }
+}
+
+.user-menu-content {
+    position: relative;
+    z-index: 2;
+    background-color: #181818;
 } 

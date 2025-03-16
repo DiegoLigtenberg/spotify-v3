@@ -21,7 +21,27 @@ self.addEventListener('install', event => {
   event.waitUntil(
     caches.open(CACHE_NAME).then(cache => {
       console.log('[Service Worker] Caching static assets');
-      return cache.addAll(STATIC_ASSETS);
+      
+      // Use Promise.allSettled instead of Promise.all to handle individual failures
+      return Promise.allSettled(
+        STATIC_ASSETS.map(url => {
+          return fetch(url)
+            .then(response => {
+              if (!response.ok) {
+                throw new Error(`Failed to fetch ${url}: ${response.status}`);
+              }
+              return cache.put(url, response);
+            })
+            .catch(error => {
+              console.warn(`[Service Worker] Failed to cache ${url}: ${error.message}`);
+              // Continue despite the error
+              return Promise.resolve();
+            });
+        })
+      ).then(results => {
+        const successful = results.filter(r => r.status === 'fulfilled').length;
+        console.log(`[Service Worker] Cached ${successful}/${STATIC_ASSETS.length} assets successfully`);
+      });
     })
   );
 });

@@ -2,6 +2,7 @@ import AudioPlayer from './modules/AudioPlayer.js';
 import SongListManager from './modules/SongListManager.js';
 import UIManager from './modules/UIManager.js';
 import PlaylistManager from './modules/PlaylistManager.js';
+import { authFetch, isAuthenticated } from './modules/supabase/auth.js';
 
 // Set up client-side logging to server
 class BrowserLogger {
@@ -848,13 +849,43 @@ class MusicPlayer {
     }
 }
 
-// Initialize the application when the DOM is loaded
-document.addEventListener('DOMContentLoaded', () => {
-    console.log('DOM loaded, initializing MusicPlayer...');
-    try {
-        window.musicPlayer = new MusicPlayer();
-    } catch (error) {
-        console.error('Error initializing music player:', error);
-        alert('Error initializing the music player. Please refresh the page.');
+// Main initialization function
+async function initApp() {
+    // Wait for DOM to be fully loaded
+    if (document.readyState !== 'complete') {
+        await new Promise(resolve => {
+            window.addEventListener('load', resolve, { once: true });
+        });
     }
-}); 
+    
+    console.log('Initializing app...');
+    
+    // Check authentication status first
+    const authenticated = await isAuthenticated();
+    console.log('Authentication status:', authenticated ? 'Logged in' : 'Not logged in');
+    
+    // Initialize app components
+    const app = new MusicPlayer();
+    window.app = app; // Make available globally for debugging
+    
+    // Register service worker
+    if ('serviceWorker' in navigator) {
+        window.addEventListener('load', () => {
+            navigator.serviceWorker.register('/static/js/service-worker.js')
+                .then(registration => {
+                    console.log('Service Worker registered with scope:', registration.scope);
+                })
+                .catch(error => {
+                    console.error('Service Worker registration failed:', error);
+                });
+        });
+    }
+}
+
+// Start the app
+initApp().catch(error => {
+    console.error('Error initializing app:', error);
+});
+
+// Make authFetch available globally for service worker and other components
+window.authFetch = authFetch; 

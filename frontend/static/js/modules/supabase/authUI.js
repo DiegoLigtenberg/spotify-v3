@@ -264,7 +264,32 @@ class AuthUI {
         // Hide welcome screen
         this.hideWelcomeScreen();
         
-        // You could add a user display in the top right corner of the app
+        // Update the user profile button
+        const userProfileButton = document.querySelector('.user-profile-button');
+        const userNameElement = document.querySelector('.user-name');
+        const userEmailElement = document.querySelector('.user-email');
+        
+        if (userProfileButton && userNameElement && userEmailElement) {
+            userProfileButton.classList.remove('hidden');
+            
+            // Set user's name or email if available
+            const displayName = user.user_metadata?.name || user.email?.split('@')[0] || 'User';
+            userNameElement.textContent = displayName;
+            
+            // Set tooltip with full name
+            userNameElement.title = displayName;
+            
+            // Set full email in dropdown
+            userEmailElement.textContent = user.email || 'No email available';
+            
+            // Make sure we remove old event listeners before adding new ones
+            const newUserProfileButton = userProfileButton.cloneNode(true);
+            userProfileButton.parentNode.replaceChild(newUserProfileButton, userProfileButton);
+            
+            // Set up dropdown toggle and event listeners
+            this.setupUserProfileDropdown();
+        }
+        
         console.log('User authenticated:', user.email);
     }
     
@@ -274,6 +299,13 @@ class AuthUI {
     updateUIForLoggedOut() {
         // Show welcome screen
         this.showWelcomeScreen();
+        
+        // Hide the user profile button
+        const userProfileButton = document.querySelector('.user-profile-button');
+        
+        if (userProfileButton) {
+            userProfileButton.classList.add('hidden');
+        }
     }
     
     /**
@@ -509,6 +541,48 @@ class AuthUI {
             } else {
                 submitBtn.textContent = formId === 'login-form' ? 'Log In' : 'Create Account';
             }
+        }
+    }
+    
+    /**
+     * Set up the user profile dropdown functionality
+     */
+    setupUserProfileDropdown() {
+        const userProfileButton = document.querySelector('.user-profile-button');
+        const logoutButton = document.querySelector('.user-menu-item.logout-button');
+        const accountLink = document.querySelector('.user-menu-item.account-link');
+        
+        if (!userProfileButton) return;
+        
+        // Toggle dropdown when clicking the profile button
+        userProfileButton.addEventListener('click', (e) => {
+            e.stopPropagation();
+            userProfileButton.classList.toggle('active');
+        });
+        
+        // Close dropdown when clicking outside
+        document.addEventListener('click', (e) => {
+            if (!userProfileButton.contains(e.target)) {
+                userProfileButton.classList.remove('active');
+            }
+        });
+        
+        // Handle logout button click
+        if (logoutButton) {
+            logoutButton.addEventListener('click', (e) => {
+                e.preventDefault();
+                this.handleLogout();
+            });
+        }
+        
+        // Handle account link click (if implemented)
+        if (accountLink) {
+            accountLink.addEventListener('click', (e) => {
+                e.preventDefault();
+                userProfileButton.classList.remove('active');
+                // Add account page navigation logic here
+                console.log('Navigate to account page');
+            });
         }
     }
 }

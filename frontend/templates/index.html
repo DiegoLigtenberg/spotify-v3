@@ -76,6 +76,39 @@
 
         <!-- Main Content -->
         <div class="main-content">
+            <!-- User Profile in Top-Right Corner -->
+            <div class="user-profile-container">
+                <button class="user-profile-button hidden">
+                    <div class="user-avatar">
+                        <i class="fas fa-user"></i>
+                    </div>
+                    <span class="user-name">User</span>
+                    <div class="dropdown-icon">
+                        <i class="fas fa-caret-down"></i>
+                    </div>
+                    
+                    <!-- User menu dropdown -->
+                    <div class="user-menu">
+                        <div class="user-menu-arrow"></div>
+                        <div class="user-menu-content">
+                            <div class="user-menu-header">
+                                <div class="user-email">user@example.com</div>
+                            </div>
+                            <ul class="user-menu-items">
+                                <li class="user-menu-item account-link">
+                                    <i class="fas fa-user-cog"></i>
+                                    Account
+                                </li>
+                                <li class="user-menu-item logout-button">
+                                    <i class="fas fa-sign-out-alt"></i>
+                                    Logout
+                                </li>
+                            </ul>
+                        </div>
+                    </div>
+                </button>
+            </div>
+            
             <div class="search-bar">
                 <input type="text" id="search" placeholder="Search for songs...">
             </div>
@@ -516,7 +549,7 @@
     </style>
     
     <!-- Fallback Auth UI (in case JS doesn't add it) -->
-    <div class="auth-container">
+    <div class="auth-container" style="display: none;">
         <div class="auth-ui">
             <div class="logged-out-view">
                 <button id="auth-login-btn" class="auth-button">Login / Sign Up</button>

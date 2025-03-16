@@ -19,6 +19,32 @@ const authStateChangeEmitter = {
     }
 };
 
+// Get the Supabase client
+const sb = getClient();
+
+// Helper function to get the current session token
+export function getAuthToken() {
+    const session = sb.auth.session();
+    return session ? session.access_token : null;
+}
+
+// Helper to add auth headers to fetch requests
+export function addAuthHeaders(options = {}) {
+    const token = getAuthToken();
+    
+    if (!token) return options;
+    
+    // Initialize headers object if it doesn't exist
+    if (!options.headers) {
+        options.headers = {};
+    }
+    
+    // Add token to headers
+    options.headers['Authorization'] = `Bearer ${token}`;
+    
+    return options;
+}
+
 /**
  * Sign up a new user with email and password
  * @param {string} email - User's email
@@ -182,8 +208,14 @@ export async function getCurrentUser() {
  * @returns {Promise<boolean>}
  */
 export async function isAuthenticated() {
-    const user = await getCurrentUser();
-    return user !== null;
+    try {
+        const { data, error } = await sb.auth.getUser();
+        if (error) throw error;
+        return !!data.user;
+    } catch (error) {
+        console.error('Error checking authentication status:', error);
+        return false;
+    }
 }
 
 /**
@@ -241,4 +273,18 @@ if (client) {
             authStateChangeEmitter.emit('USER_UPDATED', { session, user: session.user });
         }
     });
-} 
+}
+
+/**
+ * Create a fetch function that automatically adds auth headers
+ * for API requests to our backend
+ */
+export function createAuthFetch() {
+    return async (url, options = {}) => {
+        const authOptions = addAuthHeaders(options);
+        return fetch(url, authOptions);
+    };
+}
+
+// Create an authenticated fetch function that can be used for API requests
+export const authFetch = createAuthFetch(); 
