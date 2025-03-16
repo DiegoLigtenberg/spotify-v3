@@ -1006,6 +1006,70 @@ class AudioPlayer {
         // Force a reload to clear any buffered content
         this.audioElement.load();
     }
+
+    /**
+     * Play a song object by extracting the stream URL and using the play method
+     * @param {Object} song - The song object with at least an id property
+     * @returns {Promise<void>}
+     */
+    async playSong(song) {
+        if (!song) {
+            console.error('No song provided to playSong method');
+            return Promise.reject(new Error('No song provided'));
+        }
+        
+        if (!song.id) {
+            console.error('Song object has no id property:', song);
+            return Promise.reject(new Error('Invalid song object (missing id)'));
+        }
+        
+        console.log(`AudioPlayer: Playing song with ID ${song.id}`);
+        
+        // Build the URL for streaming the song - with fallback options
+        const streamEndpoints = [
+            `/api/stream/${song.id}`,
+            `/static/audio/${song.id}.mp3`,
+            `/static/audio/sample.mp3` // Fallback to a default sample if needed
+        ];
+        
+        // Add cache-busting parameter to avoid browser caching issues
+        const timestamp = Date.now();
+        const primaryUrl = `${streamEndpoints[0]}?t=${timestamp}`;
+        
+        try {
+            // Fire the songChanged event as early as possible so UI can update
+            this._fireEvent('songChanged', { songId: song.id, isLoaded: false });
+            
+            // Try to play the song - this will use our existing retry mechanisms
+            await this.play(primaryUrl);
+            
+            // If successful, fire another songChanged event with loaded=true
+            this._fireEvent('songChanged', { songId: song.id, isLoaded: true });
+            
+            return Promise.resolve();
+        } catch (error) {
+            console.error('Error in playSong method:', error);
+            
+            // Try fallbacks
+            for (let i = 1; i < streamEndpoints.length; i++) {
+                try {
+                    const fallbackUrl = `${streamEndpoints[i]}?t=${timestamp}&retry=${i}`;
+                    console.log(`Trying fallback URL: ${fallbackUrl}`);
+                    await this.play(fallbackUrl);
+                    
+                    // If successful, fire another songChanged event
+                    this._fireEvent('songChanged', { songId: song.id, isLoaded: true });
+                    
+                    return Promise.resolve();
+                } catch (fallbackError) {
+                    console.error(`Fallback ${i} failed:`, fallbackError);
+                }
+            }
+            
+            // If we get here, all attempts failed
+            return Promise.reject(new Error('All playback attempts failed'));
+        }
+    }
 }
 
 export default AudioPlayer; 

@@ -5,6 +5,9 @@
 
 import { getClient } from './client.js';
 
+// Global variable to store current user for faster access
+let currentUser = null;
+
 // Custom event emitter for auth state changes
 const authStateChangeEmitter = {
     callbacks: [],
@@ -22,10 +25,29 @@ const authStateChangeEmitter = {
 // Get the Supabase client
 const sb = getClient();
 
-// Helper function to get the current session token
+/**
+ * Get the current authentication token
+ * @returns {string|null} The access token or null if not authenticated
+ */
 export function getAuthToken() {
-    const session = sb.auth.session();
-    return session ? session.access_token : null;
+    // First check localStorage for token
+    const token = localStorage.getItem('supabase.auth.token');
+    if (token) {
+        return token;
+    }
+    
+    // If no token in localStorage, check if we have a session
+    try {
+        const sessionStr = localStorage.getItem('sb-session');
+        if (sessionStr) {
+            const session = JSON.parse(sessionStr);
+            return session?.access_token || null;
+        }
+    } catch (e) {
+        console.error('Error parsing session:', e);
+    }
+    
+    return null;
 }
 
 // Helper to add auth headers to fetch requests
@@ -85,7 +107,7 @@ export async function signIn(email, password) {
         console.log('Attempting to sign in with email/password...');
         const client = getClient();
         
-        // Correctly structured Supabase v2 call - note the parameter order
+        // Correctly structured Supabase v2 call
         const { data, error } = await client.auth.signInWithPassword({
             email,
             password
@@ -107,6 +129,9 @@ export async function signIn(email, password) {
         
         // Save session
         saveSession(data.session);
+        
+        // Update current user
+        currentUser = data.user;
         
         return {
             user: data.user,
@@ -178,6 +203,9 @@ export async function signOut() {
         // Clear session
         clearSession();
         
+        // Clear current user
+        currentUser = null;
+        
         // Notify subscribers
         authStateChangeEmitter.emit('SIGNED_OUT');
         
@@ -194,10 +222,9 @@ export async function signOut() {
  */
 export async function getCurrentUser() {
     try {
-        // First try to get from session storage
-        const session = getSession();
-        if (session?.user) {
-            return session.user;
+        // If we already have the user in memory, return it
+        if (currentUser) {
+            return currentUser;
         }
         
         // Otherwise check with Supabase
@@ -209,8 +236,9 @@ export async function getCurrentUser() {
         if (data?.user) {
             // Update session with the latest user data
             const sessionResponse = await client.auth.getSession();
-            if (sessionResponse.data.session) {
+            if (sessionResponse.data?.session) {
                 saveSession(sessionResponse.data.session);
+                currentUser = data.user;
             }
             return data.user;
         }
@@ -228,55 +256,22 @@ export async function getCurrentUser() {
  */
 export function isAuthenticated() {
     try {
-        // First check local session - faster and synchronous
+        console.log('Checking authentication status');
+        
+        // First check if we have the current user in memory
+        if (currentUser) {
+            return true;
+        }
+        
+        // Check for token
         const token = getAuthToken();
         if (!token) {
+            console.log('No auth token found');
             return false;
         }
         
-        // Check if we have a cached session in localStorage
-        const session = localStorage.getItem('supabase_auth_session');
-        if (!session) {
-            // Try to check the supabase session directly
-            const supabaseSession = localStorage.getItem('sb-session');
-            if (!supabaseSession) {
-                return false;
-            }
-        }
-        
-        // Parse the session and check if it's expired
-        try {
-            let parsedSession;
-            
-            // Try to parse our custom session first
-            if (session) {
-                parsedSession = JSON.parse(session);
-            } else {
-                // Fall back to parsing the Supabase session
-                const supabaseSession = localStorage.getItem('sb-session');
-                if (supabaseSession) {
-                    parsedSession = JSON.parse(supabaseSession);
-                }
-            }
-            
-            if (!parsedSession) {
-                return false;
-            }
-            
-            // Check expiration if available
-            if (parsedSession.expires_at) {
-                const expires = new Date(parsedSession.expires_at);
-                if (expires < new Date()) {
-                    console.log('Auth session has expired');
-                    return false;
-                }
-            }
-            
-            return true;
-        } catch (e) {
-            console.warn('Error parsing auth session:', e);
-            return false;
-        }
+        console.log('Auth token found, user is authenticated');
+        return true;
     } catch (error) {
         console.error('Error checking authentication status:', error);
         return false;
@@ -284,7 +279,7 @@ export function isAuthenticated() {
 }
 
 /**
- * Subscribe to authentication state changes
+ * Set up listener for auth state changes
  * @param {Function} callback - Function to call when auth state changes
  * @returns {Function} Unsubscribe function
  */
@@ -293,63 +288,160 @@ export function onAuthStateChange(callback) {
 }
 
 /**
- * Save session to localStorage
- * @param {Object} session - Session object from Supabase
+ * Save the session to local storage
+ * @param {Object} session - The session object
  */
 function saveSession(session) {
-    if (session) {
-        localStorage.setItem('supabase_session', JSON.stringify(session));
+    if (!session) return;
+    
+    localStorage.setItem('supabase.auth.token', session.access_token);
+    localStorage.setItem('supabase.auth.refreshToken', session.refresh_token);
+    
+    // Update current user
+    currentUser = session.user;
+    
+    // Update auth UI
+    updateAuthUI();
+    
+    // Show notification
+    showNotification('Successfully logged in!', 'success');
+    
+    // Important: Refresh liked songs after login
+    if (window.musicPlayer && window.musicPlayer.playlistManager) {
+        console.log('Refreshing liked songs after login');
+        window.musicPlayer.playlistManager.refreshAfterAuthChange();
+    } else {
+        // Set a flag to refresh when the player is ready
+        console.log('Setting refreshLikedSongsOnReady flag for delayed refresh');
+        window.refreshLikedSongsOnReady = true;
     }
 }
 
 /**
- * Get session from localStorage
- * @returns {Object|null} Session object or null
+ * Get the session from local storage
+ * @returns {Object|null} The session object or null
  */
 function getSession() {
-    try {
-        const session = localStorage.getItem('supabase_session');
-        return session ? JSON.parse(session) : null;
-    } catch (error) {
-        console.error('Error parsing session from storage:', error);
-        return null;
+    const token = localStorage.getItem('supabase.auth.token');
+    const refreshToken = localStorage.getItem('supabase.auth.refreshToken');
+    
+    if (!token || !refreshToken) return null;
+    
+    return {
+        access_token: token,
+        refresh_token: refreshToken,
+        user: currentUser
+    };
+}
+
+/**
+ * Clear the session from local storage
+ */
+function clearSession() {
+    localStorage.removeItem('supabase.auth.token');
+    localStorage.removeItem('supabase.auth.refreshToken');
+    
+    // Clear current user
+    currentUser = null;
+    
+    // Update UI
+    updateAuthUI();
+    
+    // Show notification
+    showNotification('You have been logged out', 'info');
+    
+    // Important: Refresh liked songs after logout
+    if (window.musicPlayer && window.musicPlayer.playlistManager) {
+        console.log('Refreshing liked songs after logout');
+        window.musicPlayer.playlistManager.refreshAfterAuthChange();
     }
 }
 
 /**
- * Clear session from localStorage
+ * Update the auth UI based on authentication state
  */
-function clearSession() {
-    localStorage.removeItem('supabase_session');
-}
-
-// Set up auth state change listener
-const client = getClient();
-if (client) {
-    client.auth.onAuthStateChange((event, session) => {
-        if (event === 'SIGNED_IN') {
-            saveSession(session);
-            authStateChangeEmitter.emit('SIGNED_IN', { session, user: session.user });
-        } else if (event === 'SIGNED_OUT') {
-            clearSession();
-            authStateChangeEmitter.emit('SIGNED_OUT');
-        } else if (event === 'USER_UPDATED') {
-            saveSession(session);
-            authStateChangeEmitter.emit('USER_UPDATED', { session, user: session.user });
-        }
-    });
+function updateAuthUI() {
+    const isLoggedIn = isAuthenticated();
+    console.log('Updating auth UI, logged in:', isLoggedIn);
+    
+    // Update login/logout buttons
+    const loginBtn = document.getElementById('login-btn');
+    const logoutBtn = document.getElementById('logout-btn');
+    const userDisplay = document.getElementById('user-display');
+    
+    if (loginBtn) loginBtn.style.display = isLoggedIn ? 'none' : 'inline-block';
+    if (logoutBtn) logoutBtn.style.display = isLoggedIn ? 'inline-block' : 'none';
+    
+    // Update user display if available
+    if (userDisplay && isLoggedIn && currentUser) {
+        userDisplay.textContent = currentUser.email || 'Logged In';
+        userDisplay.style.display = 'inline-block';
+    } else if (userDisplay) {
+        userDisplay.style.display = 'none';
+    }
 }
 
 /**
- * Create a fetch function that automatically adds auth headers
- * for API requests to our backend
+ * Show a notification message
+ * @param {string} message - The message to show
+ * @param {string} type - The notification type (success, error, warning, info)
+ */
+function showNotification(message, type = 'info') {
+    if (typeof window.showNotification === 'function') {
+        window.showNotification(message, type);
+    } else {
+        console.log(`Notification (${type}): ${message}`);
+    }
+}
+
+/**
+ * Create an authenticated fetch function
+ * @returns {Function} A fetch function that automatically adds auth headers
  */
 export function createAuthFetch() {
     return async (url, options = {}) => {
+        // Add auth headers if available
         const authOptions = addAuthHeaders(options);
+        
+        // Make the request
         return fetch(url, authOptions);
     };
 }
+
+// Initialize the auth system when the module loads
+(async function initAuth() {
+    try {
+        // Try to get the current user
+        const user = await getCurrentUser();
+        if (user) {
+            console.log('User already authenticated:', user.email);
+            currentUser = user;
+        }
+        
+        // Set up the auth state listener
+        const client = getClient();
+        client.auth.onAuthStateChange((event, session) => {
+            console.log('Auth state changed:', event);
+            
+            if (event === 'SIGNED_IN') {
+                saveSession(session);
+                authStateChangeEmitter.emit('SIGNED_IN', { session, user: session.user });
+            } else if (event === 'SIGNED_OUT') {
+                clearSession();
+                authStateChangeEmitter.emit('SIGNED_OUT');
+            } else if (event === 'USER_UPDATED') {
+                saveSession(session);
+                authStateChangeEmitter.emit('USER_UPDATED', { session, user: session.user });
+            }
+        });
+        
+        // Update UI based on initial state
+        updateAuthUI();
+        
+    } catch (error) {
+        console.error('Error initializing auth:', error);
+    }
+})();
 
 // Create an authenticated fetch function that can be used for API requests
 export const authFetch = createAuthFetch(); 

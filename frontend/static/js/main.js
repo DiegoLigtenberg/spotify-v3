@@ -487,49 +487,10 @@ class MusicPlayer {
         // Listen for song changed events to update like button state
         this.audioPlayer.addEventListener('songChanged', (event) => {
             if (event && event.songId) {
-                console.log('Song changed, updating like button state for song ID:', event.songId);
+                console.log('Song changed event detected, updating like button state for song ID:', event.songId);
                 
-                // CRITICAL FIX: Force immediate like button update with every approach
-                console.log('Force updating like button state on songChanged event');
-                
-                // 1. Directly update like button state without delay
-                if (this.playlistManager && this.uiManager) {
-                    const isLiked = this.playlistManager.likedSongs.some(song => 
-                        song && song.id === event.songId
-                    );
-                    
-                    console.log('Song like status in songChanged event:', {
-                        id: event.songId,
-                        isLiked: isLiked
-                    });
-                    
-                    // Immediately update UI in current execution context
-                    this.uiManager.updateLikeButton(isLiked);
-                    
-                    // Update any song rows
-                    if (typeof this.playlistManager._updateSongLikeStateInLists === 'function') {
-                        this.playlistManager._updateSongLikeStateInLists(event.songId, isLiked);
-                    }
-                    
-                    // Also directly call the PlaylistManager's specific update method
-                    if (typeof this.playlistManager._updateLikeButtonState === 'function') {
-                        this.playlistManager._updateLikeButtonState(event.songId);
-                    }
-                }
-                
-                // 2. Also call updateLikeStatus as a backup async method
-                this.updateLikeStatus(event.songId);
-                
-                // 3. Add a delayed final check after any possible race conditions
-                setTimeout(() => {
-                    console.log('Final like button state check after songChanged event');
-                    if (this.playlistManager && this.uiManager) {
-                        const finalCheck = this.playlistManager.likedSongs.some(song => 
-                            song && song.id === event.songId
-                        );
-                        this.uiManager.updateLikeButton(finalCheck);
-                    }
-                }, 300);
+                // Create a centralized approach to updating like button state
+                this._updateSongLikeState(event.songId);
             }
         });
 
@@ -910,217 +871,56 @@ class MusicPlayer {
         }
     }
 
+    /**
+     * Play a song
+     * @param {Object} song - The song to play
+     */
     async playSong(song) {
+        if (!song) {
+            console.error('Cannot play song: no song provided');
+            return;
+        }
+        
+        // Store the song that was requested to play
+        const songToPlay = song;
+        console.log('Playing song:', songToPlay);
+        
         try {
-            if (!song || !song.id) {
-                console.error('Invalid song data:', song);
-                return;
-            }
+            // Update UI with song info first for immediate feedback
+            this.updateSongInfo(songToPlay);
             
-            console.log('Playing song:', song.title);
+            // Set the audio source and play
+            await this.audioPlayer.playSong(songToPlay);
             
-            // Find song in memory first to make sure we have complete metadata
-            let songToPlay = song;
-            
-            // Try to find the song in our SongListManager
-            if (this.songListManager.hasSong(song.id)) {
-                const songInMemory = this.songListManager.findSongById(song.id);
-                if (songInMemory) {
-                    console.log('Found song in memory, using cached data');
-                    songToPlay = songInMemory;
-                }
-            } else {
-                // If song isn't in memory, try to load it and surrounding songs
-                console.log('Song not in memory, loading it and surrounding songs');
-                
-                // Try to find the song's index in the main list first
-                const songIndexInList = this.songListManager.songs.findIndex(s => s.id === song.id);
-                
-                if (songIndexInList >= 0) {
-                    // Song is in the main list, just update the index
-                    this.currentSongIndex = songIndexInList;
-                } else {
-                    // Song is not in the main list, fetch it from the server
-                    try {
-                        // Try to find the song's details via API
-                        const response = await fetch(`/api/songs/details/${song.id}`);
-                        if (response.ok) {
-                            const songData = await response.json();
-                            if (songData) {
-                                console.log('Loaded song details from API');
-                                songToPlay = songData;
-                                
-                                // Add to memory
-                                if (!this.songListManager.hasSong(songToPlay.id)) {
-                                    this.songListManager.songIdSet.add(songToPlay.id);
-                                    this.songListManager.songs.push(songToPlay);
-                                    console.log(`Added song ${songToPlay.id} to memory`);
-                                }
-                            }
-                        } else {
-                            console.error('Failed to fetch song details:', await response.text());
-                        }
-                    } catch (error) {
-                        console.warn('Error loading song details, using provided song data:', error);
-                        // Continue with the song data we have
-                    }
-                }
-            }
-            
-            // Store current song and update index
+            // Save as current song
             this.currentSong = songToPlay;
-            this.currentSongIndex = this.songListManager.songs.findIndex(s => s.id === songToPlay.id);
-            console.log('Current song index:', this.currentSongIndex);
             
-            // Update UI to show loading state
-            this.uiManager.updateCurrentSong(songToPlay);
-            this.uiManager.showNotification('Loading song...', 'info');
+            // Save to recently played
+            this._addToRecentlyPlayed(songToPlay);
             
-            // CRITICAL FIX: Force update like button immediately with direct approach
-            // This uses a completely separate code path to ensure the button shows the correct state
-            if (songToPlay.id && this.playlistManager && this.uiManager) {
-                console.log('DIRECT LIKE CHECK: Checking if song is liked:', songToPlay.id);
-                
-                // First check by ID - direct from the source of truth (liked songs array)
-                const isLiked = this.playlistManager.likedSongs.some(song => 
-                    song && song.id === songToPlay.id
+            // CRITICAL: Set like button state immediately based on liked songs list
+            if (songToPlay.id && this.playlistManager) {
+                console.log('Setting initial like state for song:', songToPlay.id);
+                // First try by ID
+                const isLiked = this.playlistManager.likedSongs.some(
+                    likedSong => likedSong && likedSong.id === songToPlay.id
                 );
                 
-                console.log('DIRECT LIKE CHECK result:', {
-                    songId: songToPlay.id,
-                    isLiked: isLiked
-                });
-                
-                // Force UI update immediately - bypassing all other code paths
-                this.uiManager.updateLikeButton(isLiked);
-                
-                // Add a backup delayed update for extra reliability
-                setTimeout(() => {
-                    const isStillLiked = this.playlistManager.likedSongs.some(song => 
-                        song && song.id === songToPlay.id
-                    );
-                    console.log('BACKUP LIKE CHECK (after 100ms):', isStillLiked);
-                    this.uiManager.updateLikeButton(isStillLiked);
-                }, 100);
-            }
-            
-            // Previous code path remains as a backup
-            if (songToPlay.id) {
-                this.updateLikeStatus(songToPlay.id);
-                
-                // Trigger the songChanged event (will be handled if the audio doesn't load)
-                this.audioPlayer._fireEvent('songChanged', { songId: songToPlay.id });
-            }
-            
-            // Preload the thumbnail image to ensure it's ready
-            if (songToPlay.id) {
-                const img = new Image();
-                img.src = `/api/thumbnail/${songToPlay.id}?t=${Date.now()}`;
-                console.log('Preloading thumbnail:', img.src);
-            }
-            
-            // Build the URL for streaming the song - with fallback options
-            const streamEndpoints = [
-                `/api/stream/${songToPlay.id}`,
-                `/static/audio/${songToPlay.id}.mp3`,
-                `/static/audio/sample.mp3` // Fallback to a default sample if needed
-            ];
-            
-            // Check if we're in a production environment (like Railway)
-            const isProduction = window.ENV && window.ENV.IS_PRODUCTION === true;
-            
-            // In production environments, prioritize the API endpoint which might be more reliable
-            if (isProduction) {
-                console.log('Production environment detected (Railway), prioritizing API endpoint');
-                
-                // Try the API endpoint with a cache-busting parameter
-                try {
-                    const apiUrl = `/api/stream/${songToPlay.id}?t=${Date.now()}`;
-                    console.log('Attempting to play using API endpoint:', apiUrl);
-                    await this.audioPlayer.play(apiUrl);
-                    this.isPlaying = true;
-                    this.uiManager.updatePlayPauseButton(true);
-                    return;
-                } catch (apiError) {
-                    console.error('API endpoint play failed, will try fallbacks:', apiError);
-                    // Continue to fallbacks
+                // Update UI
+                if (this.uiManager) {
+                    this.uiManager.updateLikeButton(isLiked);
                 }
-            }
-            
-            let attempts = 0;
-            const maxAttempts = streamEndpoints.length;
-            let success = false;
-            let lastError = null;
-            
-            while (attempts < maxAttempts && !success) {
-                try {
-                    attempts++;
-                    
-                    const songUrl = streamEndpoints[attempts - 1] + (attempts > 1 ? `?retry=${Date.now()}` : '');
-                    
-                    console.log(`Attempt ${attempts}/${maxAttempts} with URL: ${songUrl}`);
-                    
-                    await this.audioPlayer.play(songUrl);
-                    success = true;
-                    this.isPlaying = true;
-                    this.uiManager.updatePlayPauseButton(true);
-                    
-                    console.log(`Successfully played song using endpoint ${attempts}`);
-                } catch (error) {
-                    console.error(`Attempt ${attempts} with URL ${streamEndpoints[attempts-1]} failed:`, error.message);
-                    lastError = error;
-                    
-                    if (attempts === maxAttempts) {
-                        // All attempts failed, show a notification
-                        this.uiManager.showNotification('Failed to play song. Please try again later.', 'error');
-                        
-                        // Try one more approach - create an entirely new audio element
-                        try {
-                            console.log('Final attempt - trying with a direct audio element');
-                            const audioElement = document.createElement('audio');
-                            audioElement.src = `/api/stream/${songToPlay.id}?t=${Date.now()}&direct=true`;
-                            audioElement.volume = this.audioPlayer.volume;
-                            
-                            // Set up events
-                            audioElement.onplay = () => {
-                                this.isPlaying = true;
-                                this.uiManager.updatePlayPauseButton(true);
-                            };
-                            
-                            audioElement.onended = () => {
-                                this.playNext();
-                            };
-                            
-                            audioElement.ontimeupdate = () => {
-                                this.uiManager.updateProgress(
-                                    audioElement.currentTime, 
-                                    audioElement.duration
-                                );
-                            };
-                            
-                            // Try to play
-                            await audioElement.play();
-                            
-                            // If we get here, it worked!
-                            document.body.appendChild(audioElement);
-                            success = true;
-                            
-                            // Replace the main audio element
-                            const oldElement = this.audioPlayer.audioElement;
-                            this.audioPlayer.audioElement = audioElement;
-                            
-                            console.log('Direct audio element approach successful!');
-                        } catch (finalError) {
-                            console.error('Final direct approach also failed:', finalError);
-                            throw lastError; // Re-throw the last error to be caught by the outer try/catch
-                        }
-                    }
-                }
+                
+                // Also use the more robust method as a backup
+                this.playlistManager.setInitialLikeState(
+                    songToPlay.id, 
+                    songToPlay.title, 
+                    songToPlay.artist
+                );
             }
         } catch (error) {
-            console.error('Error in playSong:', error);
-            this.isPlaying = false;
-            this.uiManager.updatePlayPauseButton(false);
+            console.error('Error playing song:', error);
+            this.uiManager.showNotification('Failed to play song', 'error');
         }
     }
 
@@ -1162,8 +962,21 @@ class MusicPlayer {
         }
     }
 
+    /**
+     * Update song information in the UI
+     * @param {Object} song - The song object
+     */
     updateSongInfo(song) {
-        if (!song) return;
+        if (!song) {
+            console.warn('Cannot update song info: No song provided');
+            return;
+        }
+        
+        console.log('Updating song info:', {
+            id: song.id,
+            title: song.title,
+            artist: song.artist
+        });
         
         // Store current song
         this.currentSong = song;
@@ -1172,30 +985,28 @@ class MusicPlayer {
         this.uiManager.updateCurrentSong(song);
         this.uiManager.updatePlayPauseButton(true);
         
-        // IMPORTANT: Always update the like button state whenever song info is updated
-        if (song.id) {
-            console.log('updateSongInfo: Updating like button state for song:', song.id);
-            this.updateLikeStatus(song.id);
-        }
-        
-        // Set the initial like state using our new method
-        if (this.playlistManager) {
-            this.playlistManager.setInitialLikeState(
-                song.id, 
-                song.title, 
-                song.artist
-            );
-        } else {
-            // Fallback to the old method if playlistManager is not available
-            this.updateLikeStatus(song.id);
-        }
-        
         // Update the document title
         document.title = `${song.title} - ${song.artist || 'Unknown Artist'}`;
         
-        // Load songs around current song for better UX
-        this.songListManager.loadSongsAroundIndex(this.currentSongIndex)
-            .catch(err => console.error('Error loading songs around current index:', err));
+        // Update like button state - this is critical for maintaining correct UI state
+        if (song.id && this.playlistManager) {
+            console.log('Updating like button state for song:', song.id);
+            
+            // Use the PlaylistManager's method for handling like state
+            this.playlistManager.setInitialLikeState(
+                song.id,
+                song.title,
+                song.artist
+            );
+        } else {
+            console.warn('Cannot update like status: Missing song ID or PlaylistManager');
+        }
+        
+        // Load songs around current song for better UX (do this asynchronously)
+        if (this.songListManager) {
+            this.songListManager.loadSongsAroundIndex(this.currentSongIndex)
+                .catch(err => console.error('Error loading songs around current index:', err));
+        }
     }
 
     // Toggle repeat mode
@@ -1347,6 +1158,97 @@ class MusicPlayer {
         const randomSong = filteredSongs[randomIndex];
         
         this.playSong(randomSong);
+    }
+
+    /**
+     * Initialize the application
+     */
+    init() {
+        this._setupEventListeners();
+        this._loadLastPlayedState();
+        
+        // Initialize components
+        this.audioPlayer.init();
+        this.songListManager.init();
+        this.uiManager.init();
+        this.playlistManager.init();
+        
+        console.log('Music Player initialized');
+        
+        // Set global reference
+        window.musicPlayer = this;
+        
+        // Check if we need to refresh liked songs after auth
+        if (window.refreshLikedSongsOnReady === true) {
+            console.log('Refreshing liked songs from init (delayed from auth)');
+            setTimeout(() => {
+                if (this.playlistManager) {
+                    this.playlistManager.refreshAfterAuthChange();
+                }
+                window.refreshLikedSongsOnReady = false;
+            }, 1000);
+        }
+    }
+
+    /**
+     * Add a song to the recently played list
+     * @param {Object} song - The song to add
+     * @private
+     */
+    _addToRecentlyPlayed(song) {
+        if (!song || !song.id) return;
+        
+        // Add to recently played list
+        if (!this.recentlyPlayed) {
+            this.recentlyPlayed = [];
+        }
+        
+        // Remove the song if it already exists in the list
+        this.recentlyPlayed = this.recentlyPlayed.filter(s => s.id !== song.id);
+        
+        // Add to the beginning of the list
+        this.recentlyPlayed.unshift(song);
+        
+        // Limit the list to 20 songs
+        if (this.recentlyPlayed.length > 20) {
+            this.recentlyPlayed.pop();
+        }
+        
+        // Save to localStorage
+        localStorage.setItem('recentlyPlayed', JSON.stringify(this.recentlyPlayed));
+    }
+
+    /**
+     * Update the like state for a song across the entire application
+     * @param {string} songId - The ID of the song to update
+     * @private
+     */
+    _updateSongLikeState(songId) {
+        if (!songId) {
+            console.warn('Cannot update song like state: No song ID provided');
+            return;
+        }
+        
+        console.log('Updating like state across application for song ID:', songId);
+        
+        // 1. Update through PlaylistManager if available
+        if (this.playlistManager) {
+            console.log('Updating like state through PlaylistManager');
+            const isLiked = this.playlistManager._updateLikeButtonState(songId);
+            
+            // 2. Also update through UIManager directly as a fallback
+            if (this.uiManager) {
+                console.log('Also updating like state through UIManager');
+                this.uiManager.updateLikeButton(isLiked);
+            }
+            
+            // Log the final state for debugging
+            console.log(`Final like state for song ${songId}: ${isLiked}`);
+        } else {
+            // If no PlaylistManager, fall back to the updateLikeStatus method
+            console.log('PlaylistManager not available, using updateLikeStatus fallback');
+            this.updateLikeStatus(songId);
+        }
     }
 }
 

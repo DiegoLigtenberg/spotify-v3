@@ -311,58 +311,95 @@ class UIManager {
         }
     }
     
-    // Update like button state
+    /**
+     * Update the like button to reflect the current like status
+     * @param {boolean} isLiked - Whether the current song is liked
+     */
     updateLikeButton(isLiked) {
-        const likeButton = this.elements.likeButton;
-        if (!likeButton) {
-            console.warn('Like button element not found in UIManager');
-            return;
-        }
-
-        console.log(`UIManager: Updating like button to ${isLiked ? 'liked' : 'not liked'}`);
-        
-        // CRITICAL FIX: Force complete reconstruction of the like button
-        // This ensures no old state is preserved
-        const newLikeButton = likeButton.cloneNode(true);
-        const heartIcon = newLikeButton.querySelector('i');
-        
-        // Reset all classes first
-        newLikeButton.className = 'control-button';
-        
-        // Add the ID property
-        newLikeButton.id = 'like-current-song';
-        
-        // Reset the icon to default state
-        if (heartIcon) {
-            heartIcon.className = 'far fa-heart';
-        }
-        
-        // Now set the correct state
-        if (isLiked) {
-            newLikeButton.classList.add('liked');
-            if (heartIcon) {
-                heartIcon.className = 'fas fa-heart';
+        try {
+            console.log(`Updating like button, isLiked: ${isLiked}`);
+            
+            // Get the main like button in the player
+            const likeButton = document.getElementById('like-current-song');
+            if (likeButton) {
+                const icon = likeButton.querySelector('i');
+                
+                // Update button state
+                if (isLiked) {
+                    likeButton.classList.add('liked');
+                    if (icon) {
+                        icon.classList.remove('far');
+                        icon.classList.add('fas');
+                    }
+                } else {
+                    likeButton.classList.remove('liked');
+                    if (icon) {
+                        icon.classList.remove('fas');
+                        icon.classList.add('far');
+                    }
+                }
             }
+            
+            // Update any song list rows for the current song
+            const currentSong = document.getElementById('current-song');
+            const currentArtist = document.getElementById('current-artist');
+            const currentSongThumbnail = document.getElementById('current-thumbnail');
+            
+            if (currentSong && currentSongThumbnail) {
+                // Extract the current song ID from the thumbnail URL
+                const songSrc = currentSongThumbnail.src;
+                let songId = null;
+                
+                // Try to extract ID from API thumbnail format
+                const apiMatch = songSrc.match(/\/api\/thumbnail\/(\d+)/);
+                if (apiMatch && apiMatch[1]) {
+                    songId = apiMatch[1];
+                }
+                
+                // Try static audio format as fallback
+                if (!songId) {
+                    const staticMatch = songSrc.match(/\/static\/audio\/([^.]+)/);
+                    if (staticMatch && staticMatch[1]) {
+                        songId = staticMatch[1];
+                    }
+                }
+                
+                // Try direct number format as fallback
+                if (!songId) {
+                    const numberMatch = songSrc.match(/\/(\d+)\.jpg$/);
+                    if (numberMatch && numberMatch[1]) {
+                        songId = numberMatch[1];
+                    }
+                }
+                
+                if (songId) {
+                    // Find any song rows for this song ID
+                    const songRows = document.querySelectorAll(`.song-row[data-song-id="${songId}"]`);
+                    songRows.forEach(row => {
+                        const heartIcon = row.querySelector('.heart-icon, .fa-heart');
+                        const rowLikeButton = row.querySelector('.like-button');
+                        
+                        if (heartIcon) {
+                            if (isLiked) {
+                                heartIcon.classList.remove('far');
+                                heartIcon.classList.add('fas');
+                                if (rowLikeButton) {
+                                    rowLikeButton.classList.add('liked');
+                                }
+                            } else {
+                                heartIcon.classList.remove('fas');
+                                heartIcon.classList.add('far');
+                                if (rowLikeButton) {
+                                    rowLikeButton.classList.remove('liked');
+                                }
+                            }
+                        }
+                    });
+                }
+            }
+        } catch (error) {
+            console.error('Error in updateLikeButton:', error);
         }
-        
-        // Replace the old button with the new one
-        if (likeButton.parentNode) {
-            // Store the old click handler
-            const oldClickHandler = this.onLikeToggle;
-            
-            // Replace the button
-            likeButton.parentNode.replaceChild(newLikeButton, likeButton);
-            
-            // Update our reference
-            this.elements.likeButton = newLikeButton;
-            
-            // Reattach event listener
-            newLikeButton.addEventListener('click', () => {
-                if (oldClickHandler) oldClickHandler();
-            });
-        }
-        
-        console.log(`UIManager: Like button completely reset and updated to: ${isLiked ? 'liked' : 'not liked'}`);
     }
 
     updateDragPosition(e) {
