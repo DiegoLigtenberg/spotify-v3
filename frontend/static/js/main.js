@@ -4,6 +4,200 @@ import UIManager from './modules/UIManager.js';
 import PlaylistManager from './modules/PlaylistManager.js';
 import { authFetch, isAuthenticated } from './modules/supabase/auth.js';
 
+// SongCache class for client-side caching of song data
+class SongCache {
+    constructor() {
+        this.dbPromise = this._initDatabase();
+        this.isCacheEnabled = this._checkIfCacheIsSupported();
+        
+        if (this.isCacheEnabled) {
+            console.log('Song cache initialized with IndexedDB support');
+        } else {
+            console.warn('IndexedDB not supported in this browser, song caching disabled');
+        }
+    }
+    
+    _checkIfCacheIsSupported() {
+        return 'indexedDB' in window;
+    }
+    
+    async _initDatabase() {
+        if (!this.isCacheEnabled) return null;
+        
+        return new Promise((resolve, reject) => {
+            try {
+                const request = indexedDB.open('songCache', 1);
+                
+                request.onerror = (event) => {
+                    console.error('IndexedDB error:', event.target.error);
+                    this.isCacheEnabled = false;
+                    resolve(null);
+                };
+                
+                request.onupgradeneeded = (event) => {
+                    const db = event.target.result;
+                    
+                    // Create object stores if they don't exist
+                    if (!db.objectStoreNames.contains('songs')) {
+                        db.createObjectStore('songs', { keyPath: 'id' });
+                    }
+                    
+                    if (!db.objectStoreNames.contains('thumbnails')) {
+                        db.createObjectStore('thumbnails', { keyPath: 'id' });
+                    }
+                    
+                    if (!db.objectStoreNames.contains('likedSongs')) {
+                        db.createObjectStore('likedSongs', { keyPath: 'id' });
+                    }
+                };
+                
+                request.onsuccess = (event) => {
+                    resolve(event.target.result);
+                };
+            } catch (error) {
+                console.error('Error initializing IndexedDB:', error);
+                this.isCacheEnabled = false;
+                resolve(null);
+            }
+        });
+    }
+    
+    async cacheSongs(songs) {
+        if (!this.isCacheEnabled || !songs || !songs.length) return false;
+        
+        try {
+            const db = await this.dbPromise;
+            if (!db) return false;
+            
+            const tx = db.transaction('songs', 'readwrite');
+            const store = tx.objectStore('songs');
+            
+            // Add each song to the store
+            for (const song of songs) {
+                if (song && song.id) {
+                    store.put(song);
+                }
+            }
+            
+            // Wait for transaction to complete
+            await new Promise((resolve, reject) => {
+                tx.oncomplete = () => resolve();
+                tx.onerror = (event) => reject(event.target.error);
+            });
+            
+            return true;
+        } catch (error) {
+            console.error('Error caching songs:', error);
+            return false;
+        }
+    }
+    
+    async getCachedSongs() {
+        if (!this.isCacheEnabled) return [];
+        
+        try {
+            const db = await this.dbPromise;
+            if (!db) return [];
+            
+            const tx = db.transaction('songs', 'readonly');
+            const store = tx.objectStore('songs');
+            
+            // Get all songs from the store
+            const songs = await new Promise((resolve, reject) => {
+                const request = store.getAll();
+                request.onsuccess = () => resolve(request.result);
+                request.onerror = (event) => reject(event.target.error);
+            });
+            
+            return songs || [];
+        } catch (error) {
+            console.error('Error getting cached songs:', error);
+            return [];
+        }
+    }
+    
+    async getCachedSong(songId) {
+        if (!this.isCacheEnabled || !songId) return null;
+        
+        try {
+            const db = await this.dbPromise;
+            if (!db) return null;
+            
+            const tx = db.transaction('songs', 'readonly');
+            const store = tx.objectStore('songs');
+            
+            // Get specific song by ID
+            const song = await new Promise((resolve, reject) => {
+                const request = store.get(songId);
+                request.onsuccess = () => resolve(request.result);
+                request.onerror = (event) => reject(event.target.error);
+            });
+            
+            return song || null;
+        } catch (error) {
+            console.error(`Error getting cached song ${songId}:`, error);
+            return null;
+        }
+    }
+    
+    async cacheLikedSongs(songs) {
+        if (!this.isCacheEnabled || !songs) return false;
+        
+        try {
+            const db = await this.dbPromise;
+            if (!db) return false;
+            
+            const tx = db.transaction('likedSongs', 'readwrite');
+            const store = tx.objectStore('likedSongs');
+            
+            // Clear existing liked songs
+            store.clear();
+            
+            // Add each liked song
+            for (const song of songs) {
+                if (song && song.id) {
+                    store.put(song);
+                }
+            }
+            
+            // Wait for transaction to complete
+            await new Promise((resolve, reject) => {
+                tx.oncomplete = () => resolve();
+                tx.onerror = (event) => reject(event.target.error);
+            });
+            
+            return true;
+        } catch (error) {
+            console.error('Error caching liked songs:', error);
+            return false;
+        }
+    }
+    
+    async getCachedLikedSongs() {
+        if (!this.isCacheEnabled) return [];
+        
+        try {
+            const db = await this.dbPromise;
+            if (!db) return [];
+            
+            const tx = db.transaction('likedSongs', 'readonly');
+            const store = tx.objectStore('likedSongs');
+            
+            // Get all liked songs
+            const songs = await new Promise((resolve, reject) => {
+                const request = store.getAll();
+                request.onsuccess = () => resolve(request.result);
+                request.onerror = (event) => reject(event.target.error);
+            });
+            
+            return songs || [];
+        } catch (error) {
+            console.error('Error getting cached liked songs:', error);
+            return [];
+        }
+    }
+}
+
 // Set up client-side logging to server
 class BrowserLogger {
     constructor() {
@@ -245,40 +439,36 @@ class BrowserLogger {
 
 class MusicPlayer {
     constructor() {
-        // Initialize browser logger in development
-        this.logger = new BrowserLogger();
+        // Initialize the song cache
+        this.songCache = new SongCache();
         
-        this.currentSong = null;
-        this.currentSongIndex = -1;
-        this.seekInProgress = false;
-        this.shuffleEnabled = false;
-        
-        console.log('Initializing MusicPlayer components...');
-        
-        this.audioPlayer = new AudioPlayer();
+        // Initialize UI manager
         this.uiManager = new UIManager();
-        this.songListManager = new SongListManager(
-            document.querySelector('.songs-container'),
-            {
-                totalSongs: 70,
-                visibleSongs: 30,
-                loadChunk: 20,
-                scrollThreshold: 0.05,
-                cooldownTime: 250
-            }
-        );
+        
+        // Initialize audio player
+        this.audioPlayer = new AudioPlayer();
+        this.audioPlayer.onPlay = () => this.handlePlayEvent();
+        this.audioPlayer.onEnded = () => this.handleEndEvent();
+        this.audioPlayer.onError = (error) => this.handleErrorEvent(error);
+        
+        // Initialize song list manager with elements and config
+        this.songListContainer = document.querySelector('.songs-container');
+        this.songListManager = new SongListManager(this.songListContainer, {
+            loadChunk: 20,
+            totalSongs: 100,
+            cooldownTime: 500
+        });
         
         // Initialize playlist manager
-        try {
-            this.playlistManager = new PlaylistManager();
-            console.log('PlaylistManager initialized successfully');
-        } catch (error) {
-            console.error('Error initializing PlaylistManager:', error);
-            this.uiManager.showNotification('Error loading playlists. Some features may not work correctly.', 'error');
-        }
+        this.playlistManager = new PlaylistManager();
         
+        // Store play state
+        this.isPlaying = false;
+        this.currentSong = null;
+        this.currentSongIndex = -1;
+        
+        // Set up event handlers
         this.setupEventListeners();
-        this.initializeApplication();
     }
 
     setupEventListeners() {
@@ -434,14 +624,155 @@ class MusicPlayer {
     }
 
     async initializeApplication() {
+        console.log('Initializing music player application...');
+        
         try {
-            await this.songListManager.fetchMoreSongs('down');
+            // Override the displaySongs method
+            this.songListManager.displaySongs = (songs) => this.displaySongs(songs || this.songListManager.songs);
             
-            // Preload the first few thumbnails
+            // Create global reference to the music player for other components
+            window.musicPlayer = this;
+            console.log('Set global musicPlayer reference');
+            
+            // Try to load songs from cache first for immediate display
+            const cachedSongs = await this.songCache.getCachedSongs();
+            if (cachedSongs && cachedSongs.length > 0) {
+                console.log(`Loaded ${cachedSongs.length} songs from cache for immediate display`);
+                this.songListManager.songs = cachedSongs;
+                this.songListManager.songIdSet = new Set(cachedSongs.map(song => song.id));
+                this.displaySongs(cachedSongs);
+                
+                // Set up lazy loading while fetching fresh data
+                this._setupLazyLoading();
+            }
+            
+            // Load initial songs from API (in parallel with showing cached songs)
+            const initialResponse = await fetch('/api/songs?offset=0&limit=20', {
+                headers: {
+                    'Cache-Control': 'max-age=300' // Add caching headers
+                }
+            });
+            
+            if (!initialResponse.ok) throw new Error('Failed to fetch initial songs');
+            
+            const initialData = await initialResponse.json();
+            const songs = initialData.songs || [];
+            
+            // Store songs in our song manager and cache
+            if (songs.length > 0) {
+                songs.forEach(song => this.songListManager.songIdSet.add(song.id));
+                this.songListManager.songs = songs;
+                this.songListManager.hasMoreSongs = initialData.has_more;
+                this.songListManager.totalSongsCount = initialData.total;
+                
+                // Update display if we didn't have cached songs
+                if (!cachedSongs || cachedSongs.length === 0) {
+                    this.displaySongs(songs);
+                }
+                
+                // Cache the songs for next time
+                this.songCache.cacheSongs(songs);
+            }
+            
+            // Set up lazy loading for song thumbnails
+            this._setupLazyLoading();
+            
+            // Preload a few thumbnails for better UX
             this._preloadThumbnails();
+            
+            // Load liked songs from cache first
+            const cachedLikedSongs = await this.songCache.getCachedLikedSongs();
+            if (cachedLikedSongs && cachedLikedSongs.length > 0) {
+                console.log(`Loaded ${cachedLikedSongs.length} liked songs from cache`);
+                if (this.playlistManager) {
+                    this.playlistManager.likedSongs = cachedLikedSongs;
+                    this.playlistManager._renderLikedSongs();
+                    this.songListManager.loadLikedSongs(cachedLikedSongs);
+                }
+            }
+            
+            // Then load fresh liked songs from database if authenticated
+            await this._loadUserLikedSongsIntoMemory();
+            
+            // Load active playlist songs into memory
+            this._loadVisiblePlaylistSongsIntoMemory();
+            
+            console.log('Music player application initialized successfully!');
         } catch (error) {
-            console.error('Error initializing application:', error);
-            alert('Error loading songs. Please refresh the page.');
+            console.error('Failed to initialize application:', error);
+            this.uiManager.showNotification('Error loading songs. Please try refreshing the page.', 'error');
+        }
+    }
+    
+    /**
+     * Load the current user's liked songs into memory
+     */
+    async _loadUserLikedSongsIntoMemory() {
+        if (isAuthenticated()) {
+            console.log('User is authenticated, preloading liked songs into memory');
+            
+            try {
+                // Use the playlistManager's liked songs if available
+                if (this.playlistManager && this.playlistManager.likedSongs && 
+                    this.playlistManager.likedSongs.length > 0) {
+                    
+                    console.log('Using liked songs from PlaylistManager, count:', this.playlistManager.likedSongs.length);
+                    this.songListManager.loadLikedSongs(this.playlistManager.likedSongs);
+                    
+                    // Cache liked songs for future use
+                    this.songCache.cacheLikedSongs(this.playlistManager.likedSongs);
+                } else {
+                    // Otherwise fetch liked songs directly
+                    console.log('Fetching liked songs directly from API');
+                    const response = await authFetch('/api/liked-songs', {
+                        headers: {
+                            'Cache-Control': 'max-age=300' // Add caching
+                        }
+                    });
+                    
+                    if (response.ok) {
+                        const data = await response.json();
+                        if (data.songs && data.songs.length > 0) {
+                            console.log(`Loading ${data.songs.length} liked songs into memory from API`);
+                            this.songListManager.loadLikedSongs(data.songs);
+                            
+                            // Also update the PlaylistManager's liked songs for consistency
+                            if (this.playlistManager) {
+                                this.playlistManager.likedSongs = data.songs;
+                                this.playlistManager._saveToStorage();
+                                this.playlistManager._renderLikedSongs();
+                            }
+                            
+                            // Cache liked songs for future use
+                            this.songCache.cacheLikedSongs(data.songs);
+                        }
+                    }
+                }
+            } catch (error) {
+                console.error('Error loading liked songs into memory:', error);
+                // Non-critical error, continue without liked songs in memory
+            }
+        }
+    }
+    
+    /**
+     * Load currently visible playlist songs into memory
+     */
+    _loadVisiblePlaylistSongsIntoMemory() {
+        if (!this.playlistManager || !this.playlistManager.playlists) {
+            return;
+        }
+        
+        const activeView = document.querySelector('.view-container.active');
+        if (!activeView) return;
+        
+        const playlistId = activeView.getAttribute('data-playlist-id');
+        if (!playlistId) return;
+        
+        const playlist = this.playlistManager.playlists.find(p => p.id === playlistId);
+        if (playlist && playlist.songs && playlist.songs.length > 0) {
+            console.log(`Loading songs from active playlist "${playlist.name}" into memory`);
+            this.songListManager.loadPlaylistSongs(playlist.songs);
         }
     }
 
@@ -454,7 +785,8 @@ class MusicPlayer {
         songsToPreload.forEach(song => {
             if (song && song.id) {
                 const img = new Image();
-                img.src = `/api/thumbnail/${song.id}`;
+                img.src = `/api/thumbnail/${song.id}?t=${Date.now()}`;
+                console.log('Preloading thumbnail:', img.src);
             }
         });
     }
@@ -535,21 +867,77 @@ class MusicPlayer {
             
             console.log('Playing song:', song.title);
             
-            // Store current song and index for potential retries
-            this.currentSong = song;
-            this.currentSongIndex = this.songListManager.songs.findIndex(s => s.id === song.id);
+            // Find song in memory first to make sure we have complete metadata
+            let songToPlay = song;
+            
+            // Try to find the song in our SongListManager
+            if (this.songListManager.hasSong(song.id)) {
+                const songInMemory = this.songListManager.findSongById(song.id);
+                if (songInMemory) {
+                    console.log('Found song in memory, using cached data');
+                    songToPlay = songInMemory;
+                }
+            } else {
+                // If song isn't in memory, try to load it and surrounding songs
+                console.log('Song not in memory, loading it and surrounding songs');
+                
+                // Try to find the song's index in the main list first
+                const songIndexInList = this.songListManager.songs.findIndex(s => s.id === song.id);
+                
+                if (songIndexInList >= 0) {
+                    // Song is in the main list, just update the index
+                    this.currentSongIndex = songIndexInList;
+                } else {
+                    // Song is not in the main list, fetch it from the server
+                    try {
+                        // Try to find the song's details via API
+                        const response = await fetch(`/api/songs/details/${song.id}`);
+                        if (response.ok) {
+                            const songData = await response.json();
+                            if (songData) {
+                                console.log('Loaded song details from API');
+                                songToPlay = songData;
+                                
+                                // Add to memory
+                                if (!this.songListManager.hasSong(songToPlay.id)) {
+                                    this.songListManager.songIdSet.add(songToPlay.id);
+                                    this.songListManager.songs.push(songToPlay);
+                                    console.log(`Added song ${songToPlay.id} to memory`);
+                                }
+                            }
+                        } else {
+                            console.error('Failed to fetch song details:', await response.text());
+                        }
+                    } catch (error) {
+                        console.warn('Error loading song details, using provided song data:', error);
+                        // Continue with the song data we have
+                    }
+                }
+            }
+            
+            // Store current song and update index
+            this.currentSong = songToPlay;
+            this.currentSongIndex = this.songListManager.songs.findIndex(s => s.id === songToPlay.id);
+            console.log('Current song index:', this.currentSongIndex);
             
             // Update UI to show loading state
-            this.uiManager.updateCurrentSong(song);
+            this.uiManager.updateCurrentSong(songToPlay);
             this.uiManager.showNotification('Loading song...', 'info');
             
             // Check if song is liked and update heart icon
-            this.updateLikeStatus(song.id);
+            this.updateLikeStatus(songToPlay.id);
+            
+            // Preload the thumbnail image to ensure it's ready
+            if (songToPlay.id) {
+                const img = new Image();
+                img.src = `/api/thumbnail/${songToPlay.id}?t=${Date.now()}`;
+                console.log('Preloading thumbnail:', img.src);
+            }
             
             // Build the URL for streaming the song - with fallback options
             const streamEndpoints = [
-                `/api/stream/${song.id}`,
-                `/static/audio/${song.id}.mp3`,
+                `/api/stream/${songToPlay.id}`,
+                `/static/audio/${songToPlay.id}.mp3`,
                 `/static/audio/sample.mp3` // Fallback to a default sample if needed
             ];
             
@@ -562,7 +950,7 @@ class MusicPlayer {
                 
                 // Try the API endpoint with a cache-busting parameter
                 try {
-                    const apiUrl = `/api/stream/${song.id}?t=${Date.now()}`;
+                    const apiUrl = `/api/stream/${songToPlay.id}?t=${Date.now()}`;
                     console.log('Attempting to play using API endpoint:', apiUrl);
                     await this.audioPlayer.play(apiUrl);
                     this.isPlaying = true;
@@ -605,7 +993,7 @@ class MusicPlayer {
                         try {
                             console.log('Final attempt - trying with a direct audio element');
                             const audioElement = document.createElement('audio');
-                            audioElement.src = `/api/stream/${song.id}?t=${Date.now()}&direct=true`;
+                            audioElement.src = `/api/stream/${songToPlay.id}?t=${Date.now()}&direct=true`;
                             audioElement.volume = this.audioPlayer.volume;
                             
                             // Set up events
@@ -759,8 +1147,8 @@ class MusicPlayer {
             return;
         }
         
-        if (!this.currentSong) {
-            console.warn('Cannot update like status: No current song');
+        if (!songId) {
+            console.warn('Cannot update like status: No song ID provided');
             return;
         }
         
@@ -769,16 +1157,18 @@ class MusicPlayer {
             if (!this.uiManager) return;
             
             console.log('Checking if song is liked:', {
-                title: this.currentSong.title,
-                artist: this.currentSong.artist,
                 id: songId
             });
             
-            // Let's directly check the actual UI state of the like button
-            const likeButton = document.getElementById('like-current-song');
-            const isLiked = likeButton ? likeButton.classList.contains('liked') : false;
+            // Check if the song is in the liked songs list
+            const isLiked = this.playlistManager.likedSongs.some(song => 
+                song && song.id === songId
+            );
             
-            console.log('Current like button state:', isLiked);
+            console.log('Song like status:', {
+                id: songId,
+                isLiked: isLiked
+            });
             
             // Update our UI
             this.uiManager.updateLikeButton(isLiked);
@@ -851,41 +1241,34 @@ class MusicPlayer {
 
 // Main initialization function
 async function initApp() {
-    // Wait for DOM to be fully loaded
-    if (document.readyState !== 'complete') {
-        await new Promise(resolve => {
-            window.addEventListener('load', resolve, { once: true });
-        });
-    }
-    
-    console.log('Initializing app...');
-    
-    // Check authentication status first
-    const authenticated = await isAuthenticated();
-    console.log('Authentication status:', authenticated ? 'Logged in' : 'Not logged in');
-    
-    // Initialize app components
-    const app = new MusicPlayer();
-    window.app = app; // Make available globally for debugging
-    
-    // Register service worker
-    if ('serviceWorker' in navigator) {
-        window.addEventListener('load', () => {
-            navigator.serviceWorker.register('/static/js/service-worker.js')
-                .then(registration => {
-                    console.log('Service Worker registered with scope:', registration.scope);
-                })
-                .catch(error => {
-                    console.error('Service Worker registration failed:', error);
+    try {
+        console.log('Initializing application...');
+        
+        // Create and initialize the music player as early as possible
+        window.musicPlayer = new MusicPlayer();
+        
+        // Initialize the application after DOM content is loaded
+        if (document.readyState === 'loading') {
+            document.addEventListener('DOMContentLoaded', () => {
+                console.log('DOM content loaded, initializing app components');
+                window.musicPlayer.initializeApplication().catch(error => {
+                    console.error('Error initializing music player:', error);
                 });
-        });
+            });
+        } else {
+            // DOM already loaded, initialize immediately
+            console.log('DOM already loaded, initializing app components immediately');
+            await window.musicPlayer.initializeApplication();
+        }
+        
+    } catch (error) {
+        console.error('Failed to initialize application:', error);
+        alert('An error occurred during application initialization. Please refresh the page and try again.');
     }
 }
 
-// Start the app
-initApp().catch(error => {
-    console.error('Error initializing app:', error);
-});
+// Start initialization
+initApp();
 
 // Make authFetch available globally for service worker and other components
 window.authFetch = authFetch; 

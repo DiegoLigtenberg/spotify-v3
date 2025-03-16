@@ -205,13 +205,59 @@ export async function getCurrentUser() {
 
 /**
  * Check if a user is currently authenticated
- * @returns {Promise<boolean>}
+ * @returns {boolean}
  */
-export async function isAuthenticated() {
+export function isAuthenticated() {
     try {
-        const { data, error } = await sb.auth.getUser();
-        if (error) throw error;
-        return !!data.user;
+        // First check local session - faster and synchronous
+        const token = getAuthToken();
+        if (!token) {
+            return false;
+        }
+        
+        // Check if we have a cached session in localStorage
+        const session = localStorage.getItem('supabase_auth_session');
+        if (!session) {
+            // Try to check the supabase session directly
+            const supabaseSession = localStorage.getItem('sb-session');
+            if (!supabaseSession) {
+                return false;
+            }
+        }
+        
+        // Parse the session and check if it's expired
+        try {
+            let parsedSession;
+            
+            // Try to parse our custom session first
+            if (session) {
+                parsedSession = JSON.parse(session);
+            } else {
+                // Fall back to parsing the Supabase session
+                const supabaseSession = localStorage.getItem('sb-session');
+                if (supabaseSession) {
+                    parsedSession = JSON.parse(supabaseSession);
+                }
+            }
+            
+            if (!parsedSession) {
+                return false;
+            }
+            
+            // Check expiration if available
+            if (parsedSession.expires_at) {
+                const expires = new Date(parsedSession.expires_at);
+                if (expires < new Date()) {
+                    console.log('Auth session has expired');
+                    return false;
+                }
+            }
+            
+            return true;
+        } catch (e) {
+            console.warn('Error parsing auth session:', e);
+            return false;
+        }
     } catch (error) {
         console.error('Error checking authentication status:', error);
         return false;

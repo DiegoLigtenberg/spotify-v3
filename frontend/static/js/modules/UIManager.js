@@ -396,38 +396,76 @@ class UIManager {
     }
 
     updateCurrentSong(song) {
-        this.elements.currentSongElement.textContent = song.title;
-        this.elements.currentArtistElement.textContent = song.artist || 'Unknown Artist';
-        this.elements.currentThumbnail.src = `/api/thumbnail/${song.id}`;
-        this.elements.currentThumbnail.onerror = () => {
-            this.elements.currentThumbnail.src = '/static/images/placeholder.png';
-        };
+        const currentSongElement = document.getElementById('current-song');
+        const currentArtistElement = document.getElementById('current-artist');
+        const currentThumbnailElement = document.getElementById('current-thumbnail');
+        
+        if (currentSongElement) {
+            currentSongElement.textContent = song.title || 'Unknown Title';
+        }
+        
+        if (currentArtistElement) {
+            currentArtistElement.textContent = song.artist || 'Unknown Artist';
+        }
+        
+        if (currentThumbnailElement) {
+            // Use direct thumbnail URL without cache-busting for better caching
+            const thumbnailUrl = `/api/thumbnail/${song.id}`;
+            // Set a data attribute for the original URL
+            currentThumbnailElement.setAttribute('data-original-src', thumbnailUrl);
+            // Set the src with error handling
+            currentThumbnailElement.onerror = function() {
+                this.onerror = null;
+                this.src = '/static/images/placeholder.png';
+                console.warn(`Failed to load thumbnail for song ${song.id}, using placeholder`);
+            };
+            currentThumbnailElement.src = thumbnailUrl;
+        }
         document.title = `${song.title} - ${song.artist || 'Unknown Artist'}`;
     }
 
-    createSongElement(song, isPlaying = false) {
+    createSongElement(song, isActive = false) {
         const songElement = document.createElement('div');
         songElement.className = 'song-card';
         songElement.dataset.songId = song.id;
         
-        if (isPlaying) {
+        if (isActive) {
             songElement.classList.add('playing');
         }
         
-        // Use lazy loading for thumbnails
-        const thumbnailUrl = isPlaying ? 
-            `/api/thumbnail/${song.id}` : // Load immediately if playing
-            `/static/images/placeholder.png`; // Use placeholder initially
+        // Format thumbnail with lazy loading without cache-busting for better caching
+        const thumbnailSrc = `/api/thumbnail/${song.id}`;
+        const placeholderSrc = "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNkYAAAAAYAAjCB0C8AAAAASUVORK5CYII=";
         
         songElement.innerHTML = `
-            <img src="${thumbnailUrl}" 
-                 ${!isPlaying ? `data-src="/api/thumbnail/${song.id}"` : ''}
-                 alt="Album Art" 
+            <img src="${placeholderSrc}" 
+                 data-src="${thumbnailSrc}"
+                 alt="${song.title}" 
                  loading="lazy"
-                 onerror="this.src='/static/images/placeholder.png'">
+                 onerror="this.onerror=null; this.src='/static/images/placeholder.png'">
             <h3>${song.title}</h3>
             <p>${song.artist || 'Unknown Artist'}</p>
+            <div class="song-actions">
+                <button class="like-button ${song.is_liked ? 'liked' : ''}" data-song-id="${song.id}">
+                    <i class="${song.is_liked ? 'fas' : 'far'} fa-heart heart-icon"></i>
+                </button>
+            </div>
         `;
+        
+        // Add click handler for the like button
+        const likeButton = songElement.querySelector('.like-button');
+        if (likeButton) {
+            likeButton.addEventListener('click', (e) => {
+                e.stopPropagation(); // Prevent song click event
+                
+                if (window.playlistManager) {
+                    // Toggle like state
+                    window.playlistManager.toggleLike();
+                } else {
+                    console.error('PlaylistManager not available');
+                }
+            });
+        }
         
         return songElement;
     }

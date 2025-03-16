@@ -7,6 +7,7 @@ class SongListManager {
         this.isLoading = false;
         this.totalSongsCount = 0;
         this.loadCooldown = false;
+        this.songIdSet = new Set(); // Track song IDs to avoid duplicates
         
         // Configuration
         this.config = {
@@ -85,15 +86,39 @@ class SongListManager {
                 
                 if (direction === 'down') {
                     if (this.songs.length >= this.config.totalSongs - this.config.loadChunk) {
+                        // Remove songs from the beginning and update tracking
+                        const removedSongs = this.songs.slice(0, this.config.loadChunk);
+                        removedSongs.forEach(song => {
+                            // Only remove from set if the song doesn't appear elsewhere in the array
+                            if (!this.songs.slice(this.config.loadChunk).some(s => s.id === song.id)) {
+                                this.songIdSet.delete(song.id);
+                            }
+                        });
                         this.songs = this.songs.slice(this.config.loadChunk);
                         this.currentOffset += this.config.loadChunk;
                     }
-                    this.songs = [...this.songs, ...data.songs];
+                    
+                    // Add only new songs that aren't already in memory
+                    const newSongs = data.songs.filter(song => !this.songIdSet.has(song.id));
+                    newSongs.forEach(song => this.songIdSet.add(song.id));
+                    this.songs = [...this.songs, ...newSongs];
                 } else {
                     if (this.songs.length >= this.config.totalSongs - this.config.loadChunk) {
+                        // Remove songs from the end and update tracking
+                        const removedSongs = this.songs.slice(-this.config.loadChunk);
+                        removedSongs.forEach(song => {
+                            // Only remove from set if the song doesn't appear elsewhere in the array
+                            if (!this.songs.slice(0, -this.config.loadChunk).some(s => s.id === song.id)) {
+                                this.songIdSet.delete(song.id);
+                            }
+                        });
                         this.songs = this.songs.slice(0, -this.config.loadChunk);
                     }
-                    this.songs = [...data.songs, ...this.songs];
+                    
+                    // Add only new songs that aren't already in memory
+                    const newSongs = data.songs.filter(song => !this.songIdSet.has(song.id));
+                    newSongs.forEach(song => this.songIdSet.add(song.id));
+                    this.songs = [...newSongs, ...this.songs];
                     this.currentOffset = fetchOffset;
                 }
                 
@@ -171,6 +196,118 @@ class SongListManager {
             song.title.toLowerCase().includes(searchTerm.toLowerCase()) ||
             (song.artist && song.artist.toLowerCase().includes(searchTerm.toLowerCase()))
         );
+    }
+
+    /**
+     * Load liked songs into memory
+     * @param {Array} likedSongs - Array of liked song objects
+     */
+    loadLikedSongs(likedSongs) {
+        if (!likedSongs || !Array.isArray(likedSongs) || likedSongs.length === 0) {
+            console.log('No liked songs to load into memory');
+            return;
+        }
+        
+        console.log(`Loading ${likedSongs.length} liked songs into memory`);
+        
+        // Filter out songs that are already in memory
+        const newSongs = likedSongs.filter(song => !this.songIdSet.has(song.id));
+        
+        if (newSongs.length === 0) {
+            console.log('All liked songs are already in memory');
+            return;
+        }
+        
+        console.log(`Adding ${newSongs.length} new liked songs to memory`);
+        
+        // Track the IDs and add the songs
+        newSongs.forEach(song => this.songIdSet.add(song.id));
+        this.songs = [...this.songs, ...newSongs];
+        
+        // If we've gone over our limit, trim the least recently added songs
+        // but avoid removing any liked songs we just added
+        if (this.songs.length > this.config.totalSongs) {
+            const excess = this.songs.length - this.config.totalSongs;
+            const songsToRemove = this.songs.slice(0, excess);
+            
+            // Remove IDs that won't exist anywhere else in the array
+            songsToRemove.forEach(song => {
+                if (!this.songs.slice(excess).some(s => s.id === song.id)) {
+                    this.songIdSet.delete(song.id);
+                }
+            });
+            
+            // Update the array
+            this.songs = this.songs.slice(excess);
+            this.currentOffset += excess;
+        }
+    }
+    
+    /**
+     * Load playlist songs into memory
+     * @param {Array} playlistSongs - Array of playlist song objects
+     */
+    loadPlaylistSongs(playlistSongs) {
+        if (!playlistSongs || !Array.isArray(playlistSongs) || playlistSongs.length === 0) {
+            console.log('No playlist songs to load into memory');
+            return;
+        }
+        
+        console.log(`Loading ${playlistSongs.length} playlist songs into memory`);
+        
+        // Filter out songs that are already in memory
+        const newSongs = playlistSongs.filter(song => !this.songIdSet.has(song.id));
+        
+        if (newSongs.length === 0) {
+            console.log('All playlist songs are already in memory');
+            return;
+        }
+        
+        console.log(`Adding ${newSongs.length} new playlist songs to memory`);
+        
+        // Track the IDs and add the songs
+        newSongs.forEach(song => this.songIdSet.add(song.id));
+        this.songs = [...this.songs, ...newSongs];
+        
+        // If we've gone over our limit, trim the least recently added songs
+        // but avoid removing any playlist songs we just added
+        if (this.songs.length > this.config.totalSongs) {
+            const excess = this.songs.length - this.config.totalSongs;
+            const songsToRemove = this.songs.slice(0, excess);
+            
+            // Remove IDs that won't exist anywhere else in the array
+            songsToRemove.forEach(song => {
+                if (!this.songs.slice(excess).some(s => s.id === song.id)) {
+                    this.songIdSet.delete(song.id);
+                }
+            });
+            
+            // Update the array
+            this.songs = this.songs.slice(excess);
+            this.currentOffset += excess;
+        }
+    }
+    
+    /**
+     * Find a song in memory by ID
+     * @param {string} songId - ID of the song to find
+     * @returns {Object|null} - Song object or null if not found
+     */
+    findSongById(songId) {
+        if (!songId || !this.songIdSet.has(songId)) {
+            return null;
+        }
+        
+        return this.songs.find(song => song.id === songId) || null;
+    }
+    
+    /**
+     * Check if a song is already in memory
+     * @param {string} songId - ID of the song to check
+     * @returns {boolean} - True if song is in memory
+     */
+    hasSong(songId) {
+        return this.songIdSet.has(songId);
     }
 }
 

@@ -313,6 +313,28 @@ def stream_song(song_id):
 @app.route('/api/thumbnail/<song_id>')
 def get_thumbnail(song_id):
     try:
+        # Check if we have this thumbnail in the cache
+        cache_key = f"thumbnail_{song_id}"
+        cached_thumbnail = getattr(app, 'thumbnail_cache', {}).get(cache_key)
+        
+        if cached_thumbnail:
+            logger.info(f"Serving thumbnail for song {song_id} from memory cache")
+            response = send_file(
+                cached_thumbnail,
+                mimetype='image/png',
+                as_attachment=False,
+                download_name=f"{song_id}.png"
+            )
+            
+            # Add strong caching headers
+            response.headers.update({
+                'Cache-Control': 'public, max-age=604800',  # Cache for 1 week
+                'Pragma': 'cache',
+                'Expires': '604800'
+            })
+            
+            return response
+        
         # Fetch song data from Supabase
         response = supabase.table('songs').select('*').eq('id', song_id).execute()
         
@@ -359,6 +381,15 @@ def get_thumbnail(song_id):
                 img.save(output, format='PNG')
                 output.seek(0)
                 
+                # Initialize thumbnail cache if it doesn't exist
+                if not hasattr(app, 'thumbnail_cache'):
+                    app.thumbnail_cache = {}
+                
+                # Store the BytesIO object in the cache
+                cached_copy = BytesIO(output.getvalue())
+                app.thumbnail_cache[cache_key] = cached_copy
+                
+                # Create response with the original output
                 response = send_file(
                     output,
                     mimetype='image/png',
@@ -366,11 +397,12 @@ def get_thumbnail(song_id):
                     download_name=f"{song_id}.png"
                 )
                 
-                # Add caching headers for better performance
+                # Add strong caching headers for better performance
                 response.headers.update({
                     'Cache-Control': 'public, max-age=604800',  # Cache for 1 week
                     'Pragma': 'cache',
-                    'Expires': '604800'
+                    'Expires': '604800',
+                    'ETag': f'"{song_id}"'
                 })
                 
                 return response
@@ -727,6 +759,29 @@ def get_liked_songs():
     except Exception as e:
         logger.error(f"Error fetching liked songs: {str(e)}", exc_info=True)
         return jsonify({'error': str(e)}), 500
+
+@app.route('/api/songs/details/<song_id>')
+def get_song_details(song_id):
+    """Get details for a specific song by ID"""
+    try:
+        logger.info(f"Fetching details for song ID: {song_id}")
+        
+        # Query the song by ID
+        song_query = supabase.table('songs').select('*').eq('id', song_id).limit(1)
+        song_result = song_query.execute()
+        
+        if not song_result.data:
+            logger.error(f"Song with ID {song_id} not found")
+            return jsonify({"error": "Song not found"}), 404
+        
+        song = song_result.data[0]
+        
+        # Return song details
+        return jsonify(song)
+        
+    except Exception as e:
+        logger.error(f"Error fetching song details: {str(e)}", exc_info=True)
+        return jsonify({"error": "Failed to fetch song details"}), 500
 
 if __name__ == '__main__':
     app.run(debug=True) 
