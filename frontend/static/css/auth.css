@@ -1,0 +1,826 @@
+/* Authentication UI Styles */
+
+/* Auth Container in Sidebar */
+.sidebar {
+    /* Ensure sidebar has position relative for absolute positioning of auth container */
+    position: relative;
+}
+
+.auth-container {
+    padding: 16px;
+    width: 100%;
+    max-width: 240px;
+    box-sizing: border-box;
+    position: fixed;
+    bottom: 90px;
+    z-index: 5;
+}
+
+.auth-ui {
+    display: flex;
+    flex-direction: column;
+}
+
+.auth-button {
+    background-color: #1DB954;
+    color: white;
+    border: none;
+    border-radius: 20px;
+    padding: 8px 20px;
+    font-size: 14px;
+    font-weight: 600;
+    cursor: pointer;
+    transition: all 0.2s;
+    width: 100%;
+    text-align: center;
+}
+
+.auth-button:hover {
+    background-color: #1ed760;
+    transform: scale(1.02);
+}
+
+/* User Profile Section */
+.user-profile {
+    display: flex;
+    align-items: center;
+    margin-bottom: 12px;
+}
+
+.user-avatar {
+    width: 32px;
+    height: 32px;
+    border-radius: 50%;
+    background-color: #282828;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    margin-right: 12px;
+}
+
+.user-avatar i {
+    font-size: 20px;
+    color: #b3b3b3;
+}
+
+.user-info {
+    overflow: hidden;
+}
+
+.user-email {
+    font-size: 14px;
+    color: white;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+/* Welcome Screen for Non-Authenticated Users */
+.welcome-overlay {
+    position: fixed;
+    top: 0;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    background-color: rgba(0, 0, 0, 0.85);
+    z-index: 1000;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    backdrop-filter: blur(5px);
+}
+
+.welcome-container {
+    width: 100%;
+    max-width: 900px;
+    text-align: center;
+    padding: 40px 20px;
+}
+
+.welcome-logo {
+    font-size: 44px;
+    font-weight: 800;
+    letter-spacing: -1px;
+    background: linear-gradient(to right, #1DB954, #4DF0A8);
+    -webkit-background-clip: text;
+    -webkit-text-fill-color: transparent;
+    margin-bottom: 15px;
+}
+
+.welcome-title {
+    font-size: 36px;
+    font-weight: bold;
+    color: white;
+    margin-bottom: 16px;
+}
+
+.welcome-subtitle {
+    font-size: 18px;
+    color: #aaa;
+    margin-bottom: 40px;
+    max-width: 600px;
+    margin-left: auto;
+    margin-right: auto;
+}
+
+.welcome-features {
+    display: flex;
+    justify-content: center;
+    gap: 40px;
+    margin-bottom: 40px;
+}
+
+.welcome-feature {
+    flex: 1;
+    max-width: 240px;
+}
+
+.welcome-feature-icon {
+    font-size: 36px;
+    color: #1DB954;
+    margin-bottom: 16px;
+}
+
+.welcome-feature-title {
+    font-size: 18px;
+    font-weight: bold;
+    color: white;
+    margin-bottom: 8px;
+}
+
+.welcome-feature-text {
+    font-size: 14px;
+    color: #aaa;
+}
+
+.welcome-buttons {
+    display: flex;
+    justify-content: center;
+    gap: 20px;
+    margin-bottom: 40px;
+}
+
+.welcome-button {
+    background-color: #1DB954;
+    color: white;
+    border: none;
+    border-radius: 30px;
+    padding: 12px 30px;
+    font-size: 16px;
+    font-weight: 600;
+    cursor: pointer;
+    transition: all 0.2s;
+    min-width: 160px;
+}
+
+.welcome-button.secondary {
+    background-color: transparent;
+    border: 2px solid white;
+}
+
+.welcome-button:hover {
+    transform: scale(1.05);
+    background-color: #1ed760;
+}
+
+.welcome-button.secondary:hover {
+    background-color: rgba(255, 255, 255, 0.1);
+}
+
+.welcome-footer {
+    font-size: 14px;
+    color: #aaa;
+}
+
+.welcome-footer a {
+    color: #1DB954;
+    text-decoration: none;
+    margin: 0 10px;
+}
+
+.welcome-footer a:hover {
+    text-decoration: underline;
+}
+
+/* Auth Modal - Spotify-style */
+.auth-modal {
+    position: fixed;
+    top: 0;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    background-color: rgba(0, 0, 0, 0.8);
+    z-index: 10000;
+    display: none;
+    align-items: center;
+    justify-content: center;
+    backdrop-filter: blur(10px);
+}
+
+.auth-modal.active {
+    display: flex !important;
+}
+
+.auth-modal-content {
+    background-color: #121212;
+    border-radius: 8px;
+    width: 100%;
+    max-width: 450px;
+    box-shadow: 0 8px 24px rgba(0, 0, 0, 0.5);
+    overflow: hidden;
+    position: relative;
+    animation: modalFadeIn 0.3s ease-out;
+}
+
+@keyframes modalFadeIn {
+    from { opacity: 0; transform: translateY(-20px); }
+    to { opacity: 1; transform: translateY(0); }
+}
+
+.auth-logo {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    padding: 20px 0;
+    text-align: center;
+}
+
+.auth-logo span {
+    font-size: 28px;
+    font-weight: 700;
+    color: white;
+    margin-top: 10px;
+    letter-spacing: 1px;
+}
+
+.auth-close {
+    position: absolute;
+    top: 20px;
+    right: 20px;
+    background: none;
+    border: none;
+    color: #A7A7A7;
+    font-size: 24px;
+    cursor: pointer;
+    transition: color 0.2s;
+    z-index: 1;
+}
+
+.auth-close:hover {
+    color: white;
+}
+
+/* Tabs */
+.auth-tabs {
+    display: flex;
+    justify-content: center;
+    margin: 0 0 24px;
+}
+
+.auth-tab-btn {
+    background: none;
+    border: none;
+    color: #A7A7A7;
+    padding: 8px 16px;
+    font-size: 15px;
+    font-weight: 700;
+    cursor: pointer;
+    transition: color 0.2s;
+    position: relative;
+    text-transform: uppercase;
+    letter-spacing: 1px;
+}
+
+.auth-tab-btn:hover {
+    color: white;
+}
+
+.auth-tab-btn.active {
+    color: white;
+}
+
+.auth-tab-btn.active::after {
+    content: '';
+    position: absolute;
+    bottom: -2px;
+    left: 50%;
+    transform: translateX(-50%);
+    width: 30px;
+    height: 3px;
+    background-color: #1DB954;
+    border-radius: 1.5px;
+}
+
+.auth-tab-content {
+    display: none;
+    animation: tabFadeIn 0.3s ease-out;
+    padding: 0 48px 40px;
+}
+
+@keyframes tabFadeIn {
+    from { opacity: 0; }
+    to { opacity: 1; }
+}
+
+.auth-tab-content.active {
+    display: block;
+}
+
+/* Form Elements */
+.auth-form {
+    margin-bottom: 24px;
+}
+
+.auth-form-group {
+    margin-bottom: 20px;
+}
+
+.auth-form-group label {
+    display: block;
+    margin-bottom: 8px;
+    font-size: 14px;
+    color: #ECECEC;
+    font-weight: 600;
+}
+
+.auth-form-group input {
+    width: 100%;
+    background-color: #333333;
+    border: 1px solid #333333;
+    border-radius: 4px;
+    padding: 14px 16px;
+    color: white;
+    font-size: 16px;
+    transition: all 0.2s;
+    box-sizing: border-box;
+}
+
+.auth-form-group input:focus {
+    border-color: #1DB954;
+    outline: none;
+    box-shadow: 0 0 0 1px #1DB954;
+}
+
+.auth-form-group input::placeholder {
+    color: #A7A7A7;
+    opacity: 1;
+}
+
+.auth-error {
+    color: #F15E6C;
+    font-size: 14px;
+    margin: 8px 0;
+    font-weight: 500;
+    min-height: 20px;
+}
+
+.auth-submit-btn {
+    background-color: #1DB954;
+    color: black;
+    border: none;
+    border-radius: 500px;
+    padding: 14px;
+    font-size: 14px;
+    font-weight: 700;
+    cursor: pointer;
+    transition: all 0.2s;
+    width: 100%;
+    margin-top: 8px;
+    letter-spacing: 1.2px;
+    text-transform: uppercase;
+}
+
+.auth-submit-btn:hover {
+    background-color: #1ED760;
+    transform: scale(1.03);
+}
+
+.auth-submit-btn:active {
+    background-color: #1AA34A;
+    transform: scale(0.99);
+}
+
+.auth-submit-btn:disabled {
+    background-color: rgba(29, 185, 84, 0.5);
+    cursor: not-allowed;
+    color: rgba(0, 0, 0, 0.5);
+    transform: none;
+}
+
+/* Divider */
+.auth-divider {
+    display: flex;
+    align-items: center;
+    text-align: center;
+    margin: 32px 0;
+}
+
+.auth-divider::before,
+.auth-divider::after {
+    content: '';
+    flex: 1;
+    border-bottom: 1px solid #333333;
+}
+
+.auth-divider span {
+    margin: 0 10px;
+    color: #A7A7A7;
+    font-size: 12px;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 1px;
+}
+
+/* Provider buttons */
+.auth-providers {
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+    margin-top: 24px;
+}
+
+.auth-provider-btn {
+    background-color: transparent;
+    border: 1px solid #878787;
+    border-radius: 500px;
+    padding: 10px 16px;
+    font-size: 14px;
+    color: white;
+    font-weight: 600;
+    cursor: pointer;
+    transition: all 0.2s;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    height: 48px;
+}
+
+.auth-provider-btn:hover {
+    border-color: white;
+    transform: scale(1.02);
+}
+
+.auth-provider-btn:active {
+    transform: scale(0.98);
+}
+
+.auth-provider-btn i {
+    margin-right: 10px;
+    font-size: 18px;
+}
+
+/* Success message */
+.auth-success {
+    text-align: center;
+    padding: 20px 0;
+}
+
+.auth-success i {
+    font-size: 48px;
+    color: #1DB954;
+    margin-bottom: 20px;
+}
+
+.auth-success p {
+    font-size: 20px;
+    font-weight: 700;
+    margin-bottom: 10px;
+}
+
+.auth-success-sub {
+    font-size: 15px;
+    color: #A7A7A7;
+}
+
+/* Additional helper text */
+.auth-help-text {
+    margin-top: 24px;
+    font-size: 14px;
+    color: #A7A7A7;
+    text-align: center;
+}
+
+.auth-help-text a {
+    color: white;
+    text-decoration: underline;
+}
+
+.auth-help-text a:hover {
+    color: #1DB954;
+}
+
+/* Terms and Privacy notes */
+.auth-terms {
+    font-size: 12px;
+    color: #A7A7A7;
+    text-align: center;
+    margin-top: 32px;
+    line-height: 1.5;
+}
+
+.auth-terms a {
+    color: white;
+    text-decoration: underline;
+}
+
+.auth-terms a:hover {
+    color: #1DB954;
+}
+
+/* Mobile adjustments */
+@media (max-width: 768px) {
+    .welcome-features {
+        flex-direction: column;
+        align-items: center;
+    }
+    
+    .welcome-feature {
+        margin-bottom: 20px;
+    }
+    
+    .welcome-title {
+        font-size: 28px;
+    }
+    
+    .welcome-buttons {
+        flex-direction: column;
+        align-items: center;
+    }
+    
+    .welcome-button {
+        width: 100%;
+        max-width: 280px;
+        margin-bottom: 10px;
+    }
+}
+
+.auth-provider-note {
+    font-size: 12px;
+    color: #A7A7A7;
+    text-align: center;
+    margin-top: 12px;
+    font-style: italic;
+    line-height: 1.4;
+}
+
+/* Modern Professional Vibify Logo */
+.vibify-logo {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 128px;
+    height: 128px;
+    border-radius: 16px;
+    background: linear-gradient(145deg, #0f0f0f 0%, #1e1e1e 100%);
+    position: relative;
+    margin: 0 auto 20px;
+    box-shadow: 0 8px 32px rgba(0, 0, 0, 0.5);
+    overflow: hidden;
+}
+
+/* Sound wave visualization container */
+.vibify-logo .sound-visualization {
+    position: absolute;
+    width: 100%;
+    height: 100%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
+
+/* Sound wave bars - positioned radially around circle */
+.vibify-logo .sound-bars {
+    position: absolute;
+    bottom: 30%;
+    left: 0;
+    right: 0;
+    height: 50px;
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    width: 100%;
+    z-index: 2;
+}
+
+/* Position bars radially with increased curve */
+.vibify-logo .bar:nth-child(1) {
+    height: 15px;
+    transform: translateX(-36px) translateY(-15px);
+    animation-delay: 0.2s;
+}
+
+.vibify-logo .bar:nth-child(2) {
+    height: 25px;
+    transform: translateX(-28px) translateY(-10px);
+    animation-delay: 0.1s;
+}
+
+.vibify-logo .bar:nth-child(3) {
+    height: 35px;
+    transform: translateX(-20px) translateY(-5px);
+    animation-delay: 0.3s;
+}
+
+.vibify-logo .bar:nth-child(4) {
+    height: 42px;
+    transform: translateX(-12px) translateY(-2px);
+    animation-delay: 0.5s;
+}
+
+.vibify-logo .bar:nth-child(5) {
+    height: 48px;
+    transform: translateX(0);
+    animation-delay: 0.2s;
+}
+
+.vibify-logo .bar:nth-child(6) {
+    height: 42px;
+    transform: translateX(12px) translateY(-2px);
+    animation-delay: 0.4s;
+}
+
+.vibify-logo .bar:nth-child(7) {
+    height: 35px;
+    transform: translateX(20px) translateY(-5px);
+    animation-delay: 0.1s;
+}
+
+.vibify-logo .bar:nth-child(8) {
+    height: 25px;
+    transform: translateX(28px) translateY(-10px);
+    animation-delay: 0.3s;
+}
+
+.vibify-logo .bar:nth-child(9) {
+    height: 15px;
+    transform: translateX(36px) translateY(-15px);
+    animation-delay: 0.5s;
+}
+
+/* Adjust animation for straight bars */
+@keyframes sound-animation {
+    0% {
+        height: var(--base-height, 100%);
+        scale: 0.7;
+        opacity: 0.8;
+    }
+    100% {
+        height: calc(var(--base-height, 100%) * 1.5);
+        scale: 1;
+        opacity: 1;
+    }
+}
+
+/* Set base heights for each bar using custom properties */
+.vibify-logo .bar:nth-child(1) { --base-height: 15px; }
+.vibify-logo .bar:nth-child(2) { --base-height: 25px; }
+.vibify-logo .bar:nth-child(3) { --base-height: 35px; }
+.vibify-logo .bar:nth-child(4) { --base-height: 42px; }
+.vibify-logo .bar:nth-child(5) { --base-height: 48px; }
+.vibify-logo .bar:nth-child(6) { --base-height: 42px; }
+.vibify-logo .bar:nth-child(7) { --base-height: 35px; }
+.vibify-logo .bar:nth-child(8) { --base-height: 25px; }
+.vibify-logo .bar:nth-child(9) { --base-height: 15px; }
+
+/* Bar styling - consistent alignment with circle */
+.vibify-logo .bar {
+    position: absolute;
+    bottom: 0;
+    width: 4px;
+    border-radius: 4px;
+    background: linear-gradient(to top, rgba(29, 185, 84, 0.7), #1DB954);
+    transform-origin: bottom center;
+    box-shadow: 0 0 5px rgba(29, 185, 84, 0.4);
+    animation: sound-animation 1.7s infinite ease-in-out alternate;
+}
+
+/* Circular frequency rings smaller */
+.vibify-logo .frequency-ring {
+    position: absolute;
+    border-radius: 50%;
+    width: 75%;
+    height: 75%;
+    border: 3px solid transparent;
+    border-top: 3px solid rgba(29, 185, 84, 0.2);
+    border-bottom: 3px solid rgba(29, 185, 84, 0.2);
+    border-left: 3px solid rgba(29, 185, 84, 0.6);
+    border-right: 3px solid rgba(29, 185, 84, 0.6);
+    animation: rotate 10s linear infinite;
+    z-index: 1;
+}
+
+.vibify-logo .frequency-ring:nth-child(2) {
+    width: 60%;
+    height: 60%;
+    border-top: 3px solid rgba(29, 185, 84, 0.6);
+    border-bottom: 3px solid rgba(29, 185, 84, 0.6);
+    border-left: 3px solid rgba(29, 185, 84, 0.2);
+    border-right: 3px solid rgba(29, 185, 84, 0.2);
+    animation-duration: 7s;
+    animation-direction: reverse;
+}
+
+/* Glowing effect behind the logo */
+.vibify-logo::before {
+    content: '';
+    position: absolute;
+    width: 160%;
+    height: 160%;
+    top: -30%;
+    left: -30%;
+    background: radial-gradient(ellipse at center, rgba(29, 185, 84, 0.15) 0%, rgba(29, 185, 84, 0) 70%);
+    animation: glow-pulse 4s ease-in-out infinite;
+}
+
+/* Reflection overlay */
+.vibify-logo::after {
+    content: '';
+    position: absolute;
+    top: 0;
+    left: 0;
+    right: 0;
+    height: 30%;
+    background: linear-gradient(to bottom, rgba(255, 255, 255, 0.07), transparent);
+    border-radius: 16px 16px 0 0;
+}
+
+/* Music note icon integrated with vibration symbol */
+.vibify-logo .music-symbol {
+    position: absolute;
+    z-index: 3;
+    width: 40px;
+    height: 40px;
+    opacity: 0.9;
+}
+
+.vibify-logo .music-symbol::before {
+    display: none;
+}
+
+/* Remove small circles */
+.vibify-logo .music-symbol::after {
+    display: none;
+}
+
+/* Remove the stem */
+.vibify-logo .music-symbol .stem {
+    display: none;
+}
+
+/* Vibration wave line */
+.vibify-logo .vibration-wave {
+    display: none;
+}
+
+/* Animations */
+@keyframes rotate {
+    from {
+        transform: rotate(0deg);
+    }
+    to {
+        transform: rotate(360deg);
+    }
+}
+
+@keyframes glow-pulse {
+    0% {
+        opacity: 0.2;
+        transform: scale(0.95);
+    }
+    50% {
+        opacity: 0.3;
+        transform: scale(1);
+    }
+    100% {
+        opacity: 0.2;
+        transform: scale(0.95);
+    }
+}
+
+/* Welcome Screen Larger Logo */
+.welcome-container .vibify-logo {
+    width: 180px;
+    height: 180px;
+    border-radius: 24px;
+    margin-bottom: 30px;
+}
+
+.welcome-container .vibify-logo .bar {
+    width: 4px;
+}
+
+/* Welcome screen larger logo bar positioning with increased curve */
+.welcome-container .vibify-logo .bar:nth-child(1) { height: 20px; transform: translateX(-52px) translateY(-22px); }
+.welcome-container .vibify-logo .bar:nth-child(2) { height: 35px; transform: translateX(-40px) translateY(-15px); }
+.welcome-container .vibify-logo .bar:nth-child(3) { height: 50px; transform: translateX(-28px) translateY(-8px); }
+.welcome-container .vibify-logo .bar:nth-child(4) { height: 60px; transform: translateX(-16px) translateY(-3px); }
+.welcome-container .vibify-logo .bar:nth-child(5) { height: 70px; transform: translateX(0); }
+.welcome-container .vibify-logo .bar:nth-child(6) { height: 60px; transform: translateX(16px) translateY(-3px); }
+.welcome-container .vibify-logo .bar:nth-child(7) { height: 50px; transform: translateX(28px) translateY(-8px); }
+.welcome-container .vibify-logo .bar:nth-child(8) { height: 35px; transform: translateX(40px) translateY(-15px); }
+.welcome-container .vibify-logo .bar:nth-child(9) { height: 20px; transform: translateX(52px) translateY(-22px); }
+
+.welcome-container .vibify-logo .music-symbol {
+    transform: scale(1.4);
+} 

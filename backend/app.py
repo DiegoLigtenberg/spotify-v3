@@ -126,6 +126,17 @@ except Exception as e:
     logger.error(f"Failed to initialize S3 client: {str(e)}")
     raise
 
+# Context processor to inject environment variables into templates
+@app.context_processor
+def inject_env_variables():
+    return {
+        'env_vars': {
+            'IS_PRODUCTION': os.environ.get('RAILWAY_ENVIRONMENT_PRODUCTION') == 'True',
+            'SUPABASE_URL': os.environ.get('SUPABASE_URL', ''),
+            'SUPABASE_KEY': os.environ.get('SUPABASE_ANON_KEY', '')
+        }
+    }
+
 @app.route('/')
 def index():
     is_production = os.getenv('RAILWAY_ENVIRONMENT_PRODUCTION') == 'True'
