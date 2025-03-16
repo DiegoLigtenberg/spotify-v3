@@ -33,9 +33,24 @@
             if (hasAccessToken || hasError) {
                 console.log('Detected auth redirect with ' + (hasAccessToken ? 'access token' : 'error'));
                 
-                // If we're on a different origin than expected (like localhost on mobile)
-                if (window.location.hostname === 'localhost' || 
-                    window.location.hostname.includes('127.0.0.1')) {
+                // Check if we're on the railway.app domain but without the expected callback path
+                if (window.location.origin.includes('railway.app') && 
+                    !window.location.pathname.includes('/auth/callback')) {
+                    
+                    // Save the hash for manually processing later
+                    localStorage.setItem('pendingAuthRedirect', window.location.hash);
+                    console.log('Stored auth redirect data from Railway domain');
+                    
+                    // Redirect to the proper URL if necessary
+                    const targetUrl = 'https://vibify.up.railway.app/auth/callback' + window.location.hash;
+                    console.log('Redirecting to proper callback URL:', targetUrl);
+                    window.location.href = targetUrl;
+                    return;
+                }
+                
+                // If we're on localhost but need to handle a mobile redirect
+                if ((window.location.hostname === 'localhost' || 
+                    window.location.hostname.includes('127.0.0.1'))) {
                     
                     // Save the hash for manually processing later
                     localStorage.setItem('pendingAuthRedirect', window.location.hash);
@@ -48,10 +63,21 @@
                         
                         console.log('Redirecting to proper origin: ' + localIPMatch[0]);
                         // Redirect to the proper local IP with the hash
-                        window.location.href = `${localIPMatch[0]}/#${window.location.hash.substring(1)}`;
+                        window.location.href = localIPMatch[0] + window.location.hash;
                         return;
                     }
                 }
+            }
+            
+            // Check for pending redirect data
+            const pendingRedirect = localStorage.getItem('pendingAuthRedirect');
+            if (pendingRedirect) {
+                console.log('Found pending auth redirect, processing...');
+                // Clear it immediately to prevent loops
+                localStorage.removeItem('pendingAuthRedirect');
+                
+                // Set the hash to the pending redirect data
+                window.location.hash = pendingRedirect;
             }
         }
         

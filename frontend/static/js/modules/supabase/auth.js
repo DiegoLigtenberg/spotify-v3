@@ -158,13 +158,25 @@ export async function signInWithProvider(provider) {
         
         // Get the current origin - CRITICAL for mobile devices
         const currentOrigin = window.location.origin;
-        console.log('Auth redirect URL:', currentOrigin);
+        console.log('Auth redirect URL basis:', currentOrigin);
+        
+        // Define the proper redirect URL for each environment
+        let redirectUrl = currentOrigin;
+        if (currentOrigin.includes('railway.app')) {
+            // Use the explicit Railway production URL
+            redirectUrl = 'https://vibify.up.railway.app/auth/callback';
+            console.log('Using production redirect URL:', redirectUrl);
+        } else if (currentOrigin.includes('localhost')) {
+            // Use localhost with callback path
+            redirectUrl = `${currentOrigin}/auth/callback`;
+            console.log('Using local redirect URL:', redirectUrl);
+        }
         
         // Ensure options are correctly formatted for Supabase v2
         const { data, error } = await client.auth.signInWithOAuth({
             provider,
             options: {
-                redirectTo: currentOrigin
+                redirectTo: redirectUrl
             }
         });
         
