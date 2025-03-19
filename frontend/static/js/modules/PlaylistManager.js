@@ -552,6 +552,10 @@ class PlaylistManager {
             row.className = 'song-row';
             row.setAttribute('data-song-id', song.id);
             
+            // Make the entire row clickable
+            row.style.cursor = 'pointer';
+            row.addEventListener('click', () => this._playSong(song));
+            
             // Add song number
             const numberCell = document.createElement('td');
             numberCell.className = 'song-number';
@@ -580,9 +584,12 @@ class PlaylistManager {
             
             // Add title and artist text
             const textContainer = document.createElement('div');
+            textContainer.className = 'song-text';
+            
             const titleText = document.createElement('div');
             titleText.className = 'song-name';
             titleText.textContent = song.title || 'Unknown Title';
+            
             const artistText = document.createElement('div');
             artistText.className = 'song-artist';
             artistText.textContent = song.artist || 'Unknown Artist';
@@ -616,7 +623,7 @@ class PlaylistManager {
             playButton.innerHTML = '<i class="fas fa-play"></i>';
             playButton.title = 'Play Song';
             playButton.addEventListener('click', (e) => {
-                e.stopPropagation();
+                e.stopPropagation(); // Prevent row click
                 this._playSong(song);
             });
             
@@ -626,7 +633,7 @@ class PlaylistManager {
             removeButton.innerHTML = '<i class="fas fa-times"></i>';
             removeButton.title = 'Remove from Liked Songs';
             removeButton.addEventListener('click', (e) => {
-                e.stopPropagation();
+                e.stopPropagation(); // Prevent row click
                 this._toggleLike(song.id);
             });
             
@@ -2059,18 +2066,15 @@ class PlaylistManager {
         try {
             // First check if the function exists in window scope
             if (typeof window.getAuthToken === 'function') {
+                console.log('Using global getAuthToken function');
                 return window.getAuthToken();
             }
             
-            // Try getting from auth module if imported directly
-            if (typeof getAuthToken === 'function') {
-                return getAuthToken();
-            }
-            
             // Fallback to localStorage if necessary
+            // We use 'auth_token' to match what's set in auth.js
             const token = localStorage.getItem('auth_token');
             if (token) {
-                console.log('Retrieved token from localStorage');
+                console.log('Retrieved token from localStorage (auth_token)');
                 return token;
             }
             
@@ -2078,13 +2082,7 @@ class PlaylistManager {
             return null;
         } catch (err) {
             console.error('Error getting auth token:', err);
-            
-            // Last resort fallback to localStorage
-            try {
-                return localStorage.getItem('auth_token') || null;
-            } catch (e) {
-                return null;
-            }
+            return null;
         }
     }
 
@@ -2347,35 +2345,16 @@ class PlaylistManager {
                 }
             }
             
-            // Update local state immediately for better UI responsiveness
-            if (isCurrentlyLiked) {
-                // Remove from liked songs
-                this.likedSongs.splice(songIndex, 1);
-                console.log(`Removed song ${songId} from liked songs array`);
-                
-                // Update UI immediately
-                this._updateLikeButtonUI(false);
-                this._updateSongLikeStateInLists(songId, false);
-                
-                // If this is the currently playing song, update its like button
-                this._updateCurrentSongLikeState();
-            } else {
-                // Add to liked songs
-                this.likedSongs.push(songData);
-                console.log(`Added song ${songId} to liked songs array`);
-                
-                // Update UI immediately
-                this._updateLikeButtonUI(true);
-                this._updateSongLikeStateInLists(songId, true);
-                
-                // If this is the currently playing song, update its like button
-                this._updateCurrentSongLikeState();
-            }
-            
-            // Update database if user is authenticated
+            // Update database first if user is authenticated
             const isAuthenticated = typeof window.isAuthenticated === 'function' && window.isAuthenticated();
+            
             if (isAuthenticated) {
-                console.log(`Updating database for song ${songId}: ${isCurrentlyLiked ? 'unlike' : 'like'} operation`);
+                console.log(`Updating database for song ${songId}: ${isCurrentlyLiked ? 'unlike' : 'like'} operation (database first)`);
+                
+                // Show loading notification for long operations
+                const loadingTimeoutId = setTimeout(() => {
+                    this._showNotification('Processing change...', 'info');
+                }, 300);
                 
                 try {
                     // Call the appropriate database method
@@ -2383,8 +2362,34 @@ class PlaylistManager {
                         ? await this._unlikeSongInDatabase(songId)
                         : await this._likeSongInDatabase(songId);
                     
+                    clearTimeout(loadingTimeoutId);
+                    
                     if (success) {
                         console.log(`Database updated successfully for song ${songId}`);
+                        
+                        // Only update local state after successful database update
+                        if (isCurrentlyLiked) {
+                            // Remove from liked songs
+                            this.likedSongs.splice(songIndex, 1);
+                            console.log(`Removed song ${songId} from liked songs array after database update`);
+                        } else {
+                            // Add to liked songs
+                            this.likedSongs.push(songData);
+                            console.log(`Added song ${songId} to liked songs array after database update`);
+                        }
+                        
+                        // Update UI after database confirms change
+                        this._updateLikeButtonUI(!isCurrentlyLiked);
+                        this._updateSongLikeStateInLists(songId, !isCurrentlyLiked);
+                        this._updateCurrentSongLikeState();
+                        
+                        // Save to localStorage to match database
+                        this._saveToStorage();
+                        
+                        // Refresh liked songs display
+                        this._renderLikedSongs();
+                        
+                        // Show success notification
                         this._showNotification(
                             isCurrentlyLiked 
                                 ? `Removed "${songData.title}" from Liked Songs` 
@@ -2392,23 +2397,38 @@ class PlaylistManager {
                             'success'
                         );
                     } else {
-                        // Database operation failed, revert local state
+                        // Database operation failed
                         console.error(`Database update failed for song ${songId}`);
-                        this._showNotification('Failed to update server. Try again.', 'error');
-                        
-                        // Revert the changes
-                        this._revertLikeStateChange(songId, songData, isCurrentlyLiked);
+                        this._showNotification('Failed to update server. Please try again.', 'error');
                     }
                 } catch (error) {
+                    clearTimeout(loadingTimeoutId);
                     console.error(`Error ${isCurrentlyLiked ? 'unliking' : 'liking'} song in database:`, error);
-                    this._showNotification('Error updating server. Try again.', 'error');
-                    
-                    // Revert the changes
-                    this._revertLikeStateChange(songId, songData, isCurrentlyLiked);
+                    this._showNotification('Error updating server. Please check your connection.', 'error');
                 }
             } else {
-                // Not authenticated, just update local storage
+                // Not authenticated, update local storage only
                 console.log('User not authenticated, updating local storage only');
+                
+                if (isCurrentlyLiked) {
+                    // Remove from liked songs
+                    this.likedSongs.splice(songIndex, 1);
+                } else {
+                    // Add to liked songs
+                    this.likedSongs.push(songData);
+                }
+                
+                // Update UI
+                this._updateLikeButtonUI(!isCurrentlyLiked);
+                this._updateSongLikeStateInLists(songId, !isCurrentlyLiked);
+                this._updateCurrentSongLikeState();
+                
+                // Save to localStorage
+                this._saveToStorage();
+                
+                // Refresh liked songs display
+                this._renderLikedSongs();
+                
                 this._showNotification(
                     isCurrentlyLiked 
                         ? `Removed "${songData.title}" from Liked Songs` 
@@ -2416,12 +2436,6 @@ class PlaylistManager {
                     'success'
                 );
             }
-            
-            // Save to localStorage
-            this._saveToStorage();
-            
-            // Update the UI
-            this._renderLikedSongs();
         } catch (error) {
             console.error('Error in _toggleLike:', error);
             this._showNotification('Error updating like status', 'error');
