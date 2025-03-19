@@ -1231,6 +1231,7 @@ nav ul li a.active {
 .songs-table {
     width: 100%;
     border-collapse: collapse;
+    table-layout: fixed;  /* Fixed table layout for better column control */
 }
 
 .songs-table th {
@@ -1239,6 +1240,27 @@ nav ul li a.active {
     font-size: 14px;
     color: #aaa;
     border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+    font-weight: 500;
+}
+
+.songs-table th:first-child {
+    width: 50px;  /* Number column */
+}
+
+.songs-table th:nth-child(2) {
+    width: 40%;  /* Title column */
+}
+
+.songs-table th:nth-child(3) {
+    width: 25%;  /* Album column */
+}
+
+.songs-table th:nth-child(4) {
+    width: 80px;  /* Duration column */
+}
+
+.songs-table th:last-child {
+    width: 100px;  /* Actions column */
 }
 
 .song-row {
@@ -1252,56 +1274,103 @@ nav ul li a.active {
 .song-row td {
     padding: 10px;
     border-bottom: 1px solid rgba(255, 255, 255, 0.05);
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    vertical-align: middle;
 }
 
 .song-number {
-    width: 40px;
+    width: 50px;
     color: #aaa;
     text-align: center;
+}
+
+.song-title {
+    max-width: 0;  /* Forces text-overflow to work with table cells */
 }
 
 .song-info {
     display: flex;
     align-items: center;
+    gap: 12px;
 }
 
 .song-thumbnail {
+    flex-shrink: 0;
     width: 40px;
     height: 40px;
-    margin-right: 10px;
+    margin-right: 0;
+    border-radius: 4px;
+    overflow: hidden;
 }
 
-.song-title {
-    font-size: 14px;
-    margin-bottom: 3px;
+.song-thumbnail img {
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+}
+
+.song-text {
+    min-width: 0;  /* Allow text container to shrink */
+    overflow: hidden;
+}
+
+.song-name {
+    font-weight: 500;
+    margin-bottom: 4px;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
 }
 
 .song-artist {
-    font-size: 12px;
+    font-size: 13px;
     color: #aaa;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
 }
 
-.song-album, .song-duration {
-    font-size: 14px;
+.song-album {
     color: #aaa;
+    font-size: 14px;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+.song-duration {
+    width: 80px;
+    text-align: right;
+    color: #aaa;
+    font-size: 14px;
 }
 
 .song-actions {
+    width: 100px;
     text-align: right;
+    opacity: 0.4;
+    transition: opacity 0.2s;
+}
+
+.song-row:hover .song-actions {
+    opacity: 1;
 }
 
 .song-actions button {
-    background: transparent;
+    background: none;
     border: none;
-    color: #aaa;
+    color: #fff;
     cursor: pointer;
-    padding: 5px;
-    font-size: 14px;
-    transition: color 0.2s;
+    padding: 6px 10px;
+    margin-left: 4px;
+    border-radius: 50%;
+    transition: background-color 0.2s;
 }
 
 .song-actions button:hover {
-    color: white;
+    background-color: rgba(255, 255, 255, 0.1);
 }
 
 .unlike-btn {

@@ -2,7 +2,7 @@ import AudioPlayer from './modules/AudioPlayer.js';
 import SongListManager from './modules/SongListManager.js';
 import UIManager from './modules/UIManager.js';
 import PlaylistManager from './modules/PlaylistManager.js';
-import { authFetch, isAuthenticated } from './modules/supabase/auth.js';
+import { authFetch, isAuthenticated, getAuthToken } from './modules/supabase/auth.js';
 
 // SongCache class for client-side caching of song data
 class SongCache {
@@ -1501,8 +1501,10 @@ if (!window.thumbnailCache) {
     window.thumbnailCache = {};
 }
 
-// Start initialization only once
-initApp();
+// Make auth functions available globally for components like PlaylistManager
+window.isAuthenticated = isAuthenticated;
+window.getAuthToken = getAuthToken;
+window.authFetch = authFetch;
 
-// Make authFetch available globally for service worker and other components
-window.authFetch = authFetch; 
+// Start initialization only once
+initApp(); 
