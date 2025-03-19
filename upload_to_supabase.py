@@ -269,7 +269,7 @@ def get_latest_version(supabase_client, song_id: str) -> Tuple[int, Optional[Dic
             .limit(1) \
             .execute()
         
-            if result.data:
+        if result.data:
             return result.data[0]["version_number"], result.data[0]
         return 0, None
     except Exception as e:
@@ -866,9 +866,9 @@ def delete_today_uploads(clean_versions: bool = True) -> Dict[str, int]:
                         .execute()
                     
                     stats["versions_deleted"] += len(versions_result.data)
-                except Exception as e:
+            except Exception as e:
                 logger.error(f"Error deleting song versions: {e}")
-                    stats["api_errors"] += 1
+                stats["api_errors"] += 1
                 
         # 4. Delete the songs themselves
         if today_song_ids:
