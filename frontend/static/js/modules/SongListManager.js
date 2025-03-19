@@ -8,6 +8,7 @@ class SongListManager {
         this.totalSongsCount = 0;
         this.loadCooldown = false;
         this.songIdSet = new Set(); // Track song IDs to avoid duplicates
+        this.randomMode = options.randomMode || false; // Random mode toggle
         
         // Configuration
         this.config = {
@@ -19,6 +20,25 @@ class SongListManager {
         };
 
         this.setupScrollHandler();
+    }
+
+    // Toggle random mode on/off
+    setRandomMode(enabled) {
+        if (this.randomMode !== enabled) {
+            this.randomMode = enabled;
+            // Clear current songs and reset when toggling
+            this.reset();
+        }
+    }
+    
+    // Reset the manager state
+    reset() {
+        this.songs = [];
+        this.currentOffset = 0;
+        this.hasMoreSongs = true;
+        this.songIdSet.clear();
+        // Fetch initial set of songs
+        this.fetchMoreSongs('down');
     }
 
     setupScrollHandler() {
@@ -52,12 +72,14 @@ class SongListManager {
             currentOffset: this.currentOffset,
             scrolledFromTop: (scrolledFromTop * 100).toFixed(4) + '%',
             scrolledFromBottom: (scrolledFromBottom * 100).toFixed(4) + '%',
-            threshold: (this.config.scrollThreshold * 100).toFixed(4) + '%'
+            threshold: (this.config.scrollThreshold * 100).toFixed(4) + '%',
+            randomMode: this.randomMode
         });
 
         if (scrolledFromBottom < this.config.scrollThreshold && !this.isLoading && this.hasMoreSongs) {
             this.fetchMoreSongs('down');
-        } else if (scrolledFromTop < this.config.scrollThreshold && !this.isLoading && this.currentOffset > 0) {
+        } else if (scrolledFromTop < this.config.scrollThreshold && !this.isLoading && this.currentOffset > 0 && !this.randomMode) {
+            // Only fetch previous songs in non-random mode
             this.fetchMoreSongs('up');
         }
     }
@@ -67,13 +89,23 @@ class SongListManager {
         
         try {
             this.isLoading = true;
-            const fetchOffset = direction === 'down' ? 
-                this.currentOffset + this.songs.length : 
-                Math.max(0, this.currentOffset - this.config.loadChunk);
             
-            console.log(`Fetching songs from offset: ${fetchOffset}, direction: ${direction}, current songs: ${this.songs.length}`);
+            // In random mode, always get fresh random songs
+            // In normal mode, use pagination offsets
+            let fetchOffset = 0;
+            if (!this.randomMode) {
+                fetchOffset = direction === 'down' ? 
+                    this.currentOffset + this.songs.length : 
+                    Math.max(0, this.currentOffset - this.config.loadChunk);
+            } else if (direction === 'up') {
+                // In random mode, "up" doesn't make sense, so convert to "down"
+                direction = 'down';
+            }
             
-            const response = await fetch(`/api/songs?offset=${fetchOffset}&limit=${this.config.loadChunk}`);
+            console.log(`Fetching songs from offset: ${fetchOffset}, direction: ${direction}, random: ${this.randomMode}`);
+            
+            const url = `/api/songs?offset=${fetchOffset}&limit=${this.config.loadChunk}${this.randomMode ? '&random=true' : ''}`;
+            const response = await fetch(url);
             if (!response.ok) throw new Error(`HTTP error! status: ${response.status}`);
             const data = await response.json();
             
@@ -85,6 +117,11 @@ class SongListManager {
                 const oldHeight = this.container.scrollHeight;
                 
                 if (direction === 'down') {
+                    // For random mode, we need extra duplicate checking
+                    const newSongs = this.randomMode ? 
+                        data.songs.filter(song => !this.songIdSet.has(song.id)) :
+                        data.songs;
+                    
                     if (this.songs.length >= this.config.totalSongs - this.config.loadChunk) {
                         // Remove songs from the beginning and update tracking
                         const removedSongs = this.songs.slice(0, this.config.loadChunk);
@@ -95,14 +132,16 @@ class SongListManager {
                             }
                         });
                         this.songs = this.songs.slice(this.config.loadChunk);
-                        this.currentOffset += this.config.loadChunk;
+                        if (!this.randomMode) {
+                            this.currentOffset += this.config.loadChunk;
+                        }
                     }
                     
                     // Add only new songs that aren't already in memory
-                    const newSongs = data.songs.filter(song => !this.songIdSet.has(song.id));
                     newSongs.forEach(song => this.songIdSet.add(song.id));
                     this.songs = [...this.songs, ...newSongs];
                 } else {
+                    // Non-random mode only - up direction
                     if (this.songs.length >= this.config.totalSongs - this.config.loadChunk) {
                         // Remove songs from the end and update tracking
                         const removedSongs = this.songs.slice(-this.config.loadChunk);
@@ -164,6 +203,7 @@ class SongListManager {
         
         try {
             this.isLoading = true;
+            // Don't use random mode for specific index loading
             const response = await fetch(`/api/songs?offset=${startOffset}&limit=${this.config.loadChunk * 2 + 1}`);
             if (!response.ok) throw new Error(`HTTP error! status: ${response.status}`);
             const data = await response.json();

@@ -8,53 +8,31 @@ import { isAuthenticated, getAuthToken } from './supabase/auth.js';
 class PlaylistManager {
     constructor() {
         // Initialize properties
-        this.playlists = [];
         this.likedSongs = [];
+        this.containerUpdated = false;
         
-        // DOM elements
-        this.playlistContainer = document.querySelector('.playlists-container');
-        this.playlistModal = document.getElementById('playlist-modal');
-        this.playlistForm = document.getElementById('create-playlist-form');
-        this.closePlaylistModalBtn = this.playlistModal ? this.playlistModal.querySelector('.close-modal') : null;
-        this.likeButton = document.getElementById('like-current-song');
-        this.createPlaylistBtn = document.getElementById('create-playlist');
+        // Find the container element - use the correct ID from the HTML
+        this.likedSongsContainer = document.getElementById('liked-songs-list');
+        if (!this.likedSongsContainer) {
+            console.warn('Liked songs list element not found, will retry when DOM is fully loaded');
+            // Set up a mutation observer to find the container when it becomes available
+            this._setupContainerObserver();
+        }
         
-        // Add to playlist modal elements
-        this.addToPlaylistModal = document.getElementById('add-to-playlist-modal');
-        this.closeAddToPlaylistModalBtn = this.addToPlaylistModal ? this.addToPlaylistModal.querySelector('.close-modal') : null;
+        // Initialize storage without clearing existing data
+        this._initializeFromStorage();
         
-        // Navigation links
-        this.navLinks = document.querySelectorAll('nav a[data-view]');
+        // Set up event listeners for liked view tab
+        const likedTab = document.querySelector('a[data-view="liked"]');
+        if (likedTab) {
+            likedTab.addEventListener('click', () => this._handleLikedViewActivated());
+        }
         
-        // View containers
-        this.viewContainers = document.querySelectorAll('.view-container');
+        // Set up authenticated events
+        document.addEventListener('userAuthenticated', () => this.refreshAfterAuthChange(true));
+        document.addEventListener('userLoggedOut', () => this.refreshAfterAuthChange(false));
         
-        // Templates
-        this.playlistViewTemplate = document.getElementById('playlist-view-template');
-        
-        // Reset liked songs in localStorage (for debugging purposes)
-        localStorage.removeItem('likedSongs');
-        
-        // Load data from localStorage
-        this._loadFromStorage();
-        
-        // Load liked songs from database if the user is authenticated
-        this._loadLikedSongsIfAuthenticated();
-        
-        // Set up event listeners
-        this._setupEventListeners();
-        
-        // Render initial UI
-        this._renderPlaylists();
-        this._renderLikedSongs();
-        
-        console.log('PlaylistManager initialized', {
-            playlists: this.playlists.length,
-            likedSongs: this.likedSongs.length,
-            createBtn: !!this.createPlaylistBtn,
-            playlistModal: !!this.playlistModal,
-            closeBtn: !!this.closePlaylistModalBtn
-        });
+        console.log('PlaylistManager initialized');
     }
     
     // Add this property to the class to track click processing
@@ -143,45 +121,35 @@ class PlaylistManager {
     
     _loadFromStorage() {
         try {
-            // Load playlists from localStorage
-            const savedPlaylists = localStorage.getItem('playlists');
-            if (savedPlaylists) {
-                this.playlists = JSON.parse(savedPlaylists);
-                console.log('Loaded playlists from storage:', this.playlists.length);
-            }
-            
-            // Load liked songs from localStorage
-            const savedLikedSongs = localStorage.getItem('likedSongs');
-            if (savedLikedSongs) {
-                this.likedSongs = JSON.parse(savedLikedSongs);
-                console.log('Loaded liked songs from storage:', this.likedSongs.length);
+            const storedSongs = localStorage.getItem('likedSongs');
+            if (storedSongs) {
+                const parsedSongs = JSON.parse(storedSongs);
+                if (Array.isArray(parsedSongs)) {
+                    this.likedSongs = parsedSongs;
+                    console.log(`Loaded ${parsedSongs.length} liked songs from localStorage`);
+                    // Update the UI to reflect the songs
+                    this._renderLikedSongs();
+                } else {
+                    console.warn('Invalid liked songs data in localStorage (not an array)');
+                }
             } else {
-                // Ensure we start with an empty array if nothing is in localStorage
-                this.likedSongs = [];
-                console.log('No liked songs in storage, starting with empty array');
+                console.log('No liked songs found in localStorage');
             }
         } catch (error) {
-            console.error('Error loading from localStorage:', error);
-            // Initialize with empty arrays as fallback
-            this.playlists = [];
-            this.likedSongs = [];
+            console.error('Error loading liked songs from localStorage:', error);
         }
     }
     
     _saveToStorage() {
         try {
-            // Save playlists to localStorage
-            localStorage.setItem('playlists', JSON.stringify(this.playlists));
-            
-            // Save liked songs to localStorage
-            localStorage.setItem('likedSongs', JSON.stringify(this.likedSongs));
-            
-            console.log('Saved to localStorage:', {
-                playlists: this.playlists.length,
-                likedSongs: this.likedSongs.length
-            });
+            if (Array.isArray(this.likedSongs)) {
+                localStorage.setItem('likedSongs', JSON.stringify(this.likedSongs));
+                console.log(`Saved ${this.likedSongs.length} liked songs to localStorage`);
+            } else {
+                console.warn('Cannot save liked songs: Not an array');
+            }
         } catch (error) {
-            console.error('Error saving to localStorage:', error);
+            console.error('Error saving liked songs to localStorage:', error);
         }
     }
     
@@ -533,51 +501,49 @@ class PlaylistManager {
      * @private
      */
     _renderLikedSongs() {
-        const likedSongsList = document.getElementById('liked-songs-list');
-        const likedSongsCount = document.getElementById('liked-songs-count');
-        
-        if (!likedSongsList) {
-            console.error('Liked songs list element not found');
+        // Early validation and safety checks
+        if (!this.likedSongsContainer) {
+            console.error('Cannot render liked songs: Container not found');
             return;
         }
         
-        if (!likedSongsCount) {
-            console.error('Liked songs count element not found');
-            return;
+        const likedSongsCount = Array.isArray(this.likedSongs) ? this.likedSongs.length : 0;
+        
+        // Update debug counters and element visibility
+        const likedCountElem = document.getElementById('liked-songs-count');
+        if (likedCountElem) {
+            likedCountElem.textContent = `${likedSongsCount} songs`;
         }
         
-        console.log(`Rendering ${this.likedSongs.length} liked songs in the UI`);
+        // Clear existing content
+        this.likedSongsContainer.innerHTML = '';
         
-        // Check if liked songs array is valid
-        if (!Array.isArray(this.likedSongs)) {
-            console.warn('Liked songs is not an array, initializing empty array');
-            this.likedSongs = [];
-        }
+        console.log(`Rendering ${likedSongsCount} liked songs in UI. ` +
+                    `First few song IDs: ${Array.isArray(this.likedSongs) && this.likedSongs.length > 0 ? 
+                     this.likedSongs.slice(0, 3).map(s => s.id).join(', ') + 
+                     (this.likedSongs.length > 3 ? '...' : '') : 'none'}`);
         
-        // Update the count
-        likedSongsCount.textContent = `${this.likedSongs.length} songs`;
-        
-        // Check if we need to add a "Clear All" button
+        // Add 'Clear All' button if we have songs
         const likedSongsHeader = document.querySelector('.liked-songs-header');
         let clearAllButton = document.getElementById('clear-all-liked-songs');
         
-        if (likedSongsHeader && !clearAllButton && this.likedSongs.length > 0) {
+        if (likedSongsHeader && !clearAllButton && likedSongsCount > 0) {
             clearAllButton = document.createElement('button');
             clearAllButton.id = 'clear-all-liked-songs';
             clearAllButton.className = 'action-button danger-button';
             clearAllButton.innerHTML = '<i class="fas fa-trash-alt"></i> Clear All';
             clearAllButton.addEventListener('click', () => this._showClearAllConfirmation());
             likedSongsHeader.appendChild(clearAllButton);
-        } else if (clearAllButton && this.likedSongs.length === 0) {
+        } else if (clearAllButton && likedSongsCount === 0) {
             // Remove the button if there are no liked songs
             clearAllButton.remove();
         }
         
-        // Clear the list
-        likedSongsList.innerHTML = '';
+        // Ensure likedSongs is an array to prevent errors
+        const safelikedSongs = Array.isArray(this.likedSongs) ? this.likedSongs : [];
         
-        // Check if we have any liked songs
-        if (this.likedSongs.length === 0) {
+        // Show empty state if no songs
+        if (safelikedSongs.length === 0) {
             const emptyRow = document.createElement('tr');
             emptyRow.className = 'empty-list-row';
             emptyRow.innerHTML = `
@@ -589,21 +555,25 @@ class PlaylistManager {
                     </div>
                 </td>
             `;
-            likedSongsList.appendChild(emptyRow);
+            this.likedSongsContainer.appendChild(emptyRow);
+            console.log('Liked songs container showing empty state');
             return;
         }
         
-        // Add each song
-        this.likedSongs.forEach((song, index) => {
-            // Skip null or invalid songs
-            if (!song || !song.id) {
-                console.warn(`Found invalid song at index ${index}:`, song);
+        // Placeholder image for songs without thumbnails
+        const placeholderImgUrl = '/static/images/placeholder.png';
+        
+        // Process each song
+        let validSongsRendered = 0;
+        
+        safelikedSongs.forEach((song, index) => {
+            // Validate song structure
+            if (!song || typeof song !== 'object' || !song.id) {
+                console.warn(`Skipping invalid song at index ${index}`);
                 return;
             }
             
-            const row = document.createElement('tr');
-            row.className = 'song-row';
-            row.setAttribute('data-song-id', song.id);
+            validSongsRendered++;
             
             // Format duration
             let formattedDuration = '--:--';
@@ -613,21 +583,26 @@ class PlaylistManager {
                 formattedDuration = `${minutes}:${seconds.toString().padStart(2, '0')}`;
             }
             
-            // Format song thumbnail URL
-            const thumbnailUrl = song.thumbnailUrl || `/api/thumbnail/${song.id}`;
+            // Create table row for the song
+            const row = document.createElement('tr');
+            row.className = 'song-row';
+            row.setAttribute('data-song-id', song.id);
+            
+            // Always include a placeholder/fallback image path for songs without thumbnails
+            const thumbnailUrl = song.thumbnailUrl || placeholderImgUrl;
             
             row.innerHTML = `
                 <td class="song-number">${index + 1}</td>
                 <td class="song-title">
                     <div class="song-info">
                         <div class="song-thumbnail">
-                            <img src="data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNkYAAAAAYAAjCB0C8AAAAASUVORK5CYII=" 
+                            <img src="${placeholderImgUrl}" 
                                  data-src="${thumbnailUrl}" 
-                                 alt="${song.title}"
-                                 onerror="this.onerror=null; this.src='/static/images/placeholder.png';">
+                                 alt="${song.title || 'Unknown Title'}"
+                                 onerror="this.onerror=null; this.src='${placeholderImgUrl}';">
                         </div>
                         <div>
-                            <div class="song-name">${song.title}</div>
+                            <div class="song-name">${song.title || 'Unknown Title'}</div>
                             <div class="song-artist">${song.artist || 'Unknown Artist'}</div>
                         </div>
                     </div>
@@ -636,7 +611,7 @@ class PlaylistManager {
                 <td class="song-duration">${formattedDuration}</td>
                 <td class="song-actions">
                     <button class="remove-from-liked-btn" title="Remove from Liked Songs">
-                        <i class="fas fa-heart-broken"></i>
+                        <i class="fas fa-heart"></i>
                     </button>
                     <button class="play-song-btn" title="Play Song">
                         <i class="fas fa-play"></i>
@@ -660,7 +635,7 @@ class PlaylistManager {
             if (removeBtn) {
                 removeBtn.addEventListener('click', (e) => {
                     e.stopPropagation();
-                    this.unlikeSong(song.id);
+                    this._toggleLike(song.id);
                 });
             }
             
@@ -673,14 +648,14 @@ class PlaylistManager {
                 });
             }
             
-            likedSongsList.appendChild(row);
+            // Add the song element to the container
+            this.likedSongsContainer.appendChild(row);
         });
         
-        // Setup lazy loading for thumbnails
-        this._setupLazyLoading();
+        console.log(`Rendered ${validSongsRendered} valid liked songs in the UI`);
         
-        // Log rendering completion
-        console.log('Liked songs rendered successfully');
+        // Set up lazy loading for images
+        this._setupLazyLoading();
     }
     
     _setupLazyLoading() {
@@ -753,6 +728,13 @@ class PlaylistManager {
         // This would trigger the main player to play this song
         console.log('PlaylistManager requesting to play song:', song);
         
+        // Add basic validation to prevent errors
+        if (!song || !song.id) {
+            console.error('Cannot play song: Invalid song object', song);
+            this._showNotification('Cannot play song: Invalid song data', 'error');
+            return;
+        }
+        
         const attemptPlay = (retries = 3) => {
             // Check if the main player is available
             if (window.musicPlayer) {
@@ -762,10 +744,18 @@ class PlaylistManager {
                 );
                 
                 if (mainPlayerSong) {
+                    // If found in main player, play that version (which might have more data)
+                    console.log('Found song in main player, playing from there:', mainPlayerSong.id);
                     window.musicPlayer.playSong(mainPlayerSong);
                 } else {
-                    // If not found in main player, try to play directly
-                    window.musicPlayer.playSong(song);
+                    // If not found in main player, ensure the song has necessary fields and play directly
+                    const playableSong = {
+                        ...song,
+                        // Ensure thumbnail URL is set to a placeholder if missing
+                        thumbnailUrl: song.thumbnailUrl || `/static/images/placeholder.png`
+                    };
+                    console.log('Song not found in main player, playing directly:', playableSong.id);
+                    window.musicPlayer.playSong(playableSong);
                 }
             } else if (retries > 0) {
                 console.warn(`Main music player not available, retrying in 500ms (${retries} retries left)`);
@@ -860,7 +850,7 @@ class PlaylistManager {
             return;
         }
         
-        // Prevent rapid clicking
+        // Prevent rapid clicking and race conditions
         if (this.isProcessingLikeClick) {
             console.log('Already processing a like click, ignoring');
             return;
@@ -895,84 +885,130 @@ class PlaylistManager {
                 thumbnailUrl: currentThumbnail.src
             };
             
-            if (songIndex !== -1) {
-                // Song is already liked, unlike it
+            // Track the initial state for comparison
+            const isInitiallyLiked = songIndex !== -1;
+            
+            // Update local state immediately for responsive UI
+            if (isInitiallyLiked) {
+                // Immediately update local state for better responsiveness
+                this.likedSongs.splice(songIndex, 1);
+                this._updateLikeButtonUI(false);
+                this._updateSongLikeStateInLists(songId, false);
+                
                 console.log(`Unliking song: ${songTitle} (ID: ${songId})`);
-                
-                // First update database if user is authenticated - DATABASE FIRST APPROACH
-                if (typeof isAuthenticated === 'function' && isAuthenticated()) {
-                    this._unlikeSongInDatabase(songId)
-                        .then(success => {
-                            if (success) {
-                                // If database update succeeded, update local state
-                                this.likedSongs.splice(songIndex, 1);
-                                this._saveToStorage();
-                                this._updateLikeButtonUI(false);
-                                this._updateSongLikeStateInLists(songId, false);
-                                this._renderLikedSongs();
-                                this._showNotification(`Removed "${songTitle}" from Liked Songs`, 'info');
-                                
-                                // Update all song rows in any visible lists
-                                this._updateAllSongLikeStates();
-                            } else {
-                                this._showNotification('Failed to update server', 'error');
-                            }
-                            this.isProcessingLikeClick = false;
-                        })
-                        .catch(error => {
-                            console.error('Error unliking song in database:', error);
-                            this._showNotification('Error updating server', 'error');
-                            this.isProcessingLikeClick = false;
-                        });
-                } else {
-                    // For non-authenticated users, just update local state
-                    this.likedSongs.splice(songIndex, 1);
-                    this._saveToStorage();
-                    this._updateLikeButtonUI(false);
-                    this._updateSongLikeStateInLists(songId, false);
-                    this._renderLikedSongs();
-                    this._showNotification(`Removed "${songTitle}" from Liked Songs`, 'info');
-                    this.isProcessingLikeClick = false;
-                }
             } else {
-                // Song is not liked, add it
-                console.log(`Liking song: ${songTitle} (ID: ${songId})`);
+                // Immediately update local state for better responsiveness
+                this.likedSongs.push(songObject);
+                this._updateLikeButtonUI(true);
+                this._updateSongLikeStateInLists(songId, true);
                 
-                // First update database if user is authenticated - DATABASE FIRST APPROACH
-                if (typeof isAuthenticated === 'function' && isAuthenticated()) {
-                    this._likeSongInDatabase(songId)
-                        .then(success => {
-                            if (success) {
-                                // If database update succeeded, update local state
+                console.log(`Liking song: ${songTitle} (ID: ${songId})`);
+            }
+            
+            // Update database in the background (if authenticated)
+            const isAuthenticated = typeof window.isAuthenticated === 'function' && window.isAuthenticated();
+            if (isAuthenticated) {
+                console.log(`Updating database for song ${songId} - ${isInitiallyLiked ? 'unlike' : 'like'} operation`);
+                
+                // Start a timeout to detect slow operations
+                const timeoutId = setTimeout(() => {
+                    this._showNotification('Server update in progress...', 'info');
+                }, 500);
+                
+                // Perform the database operation
+                const dbPromise = isInitiallyLiked 
+                    ? this._unlikeSongInDatabase(songId)
+                    : this._likeSongInDatabase(songId);
+                    
+                dbPromise
+                    .then(success => {
+                        clearTimeout(timeoutId);
+                        
+                        if (success) {
+                            // Database update succeeded
+                            console.log(`Database updated successfully for song ${songId}`);
+                            this._showNotification(
+                                isInitiallyLiked 
+                                    ? `Removed "${songTitle}" from Liked Songs` 
+                                    : `Added "${songTitle}" to Liked Songs`, 
+                                isInitiallyLiked ? 'info' : 'success'
+                            );
+                            
+                            // Save to storage and update UI after database is synced
+                            this._saveToStorage();
+                            this._renderLikedSongs();
+                            
+                            // Update all song UI elements
+                            this._updateAllSongLikeStates();
+                        } else {
+                            // Database update failed - revert local state
+                            console.error(`Database update failed for song ${songId}`);
+                            this._showNotification('Failed to update server. Try again.', 'error');
+                            
+                            // Revert local state to match server
+                            if (isInitiallyLiked) {
                                 this.likedSongs.push(songObject);
-                                this._saveToStorage();
                                 this._updateLikeButtonUI(true);
                                 this._updateSongLikeStateInLists(songId, true);
-                                this._renderLikedSongs();
-                                this._showNotification(`Added "${songTitle}" to Liked Songs`, 'success');
-                                
-                                // Update all song rows in any visible lists
-                                this._updateAllSongLikeStates();
                             } else {
-                                this._showNotification('Failed to update server', 'error');
+                                const revertIndex = this._findSongIndex(songId, songTitle, artistName);
+                                if (revertIndex !== -1) {
+                                    this.likedSongs.splice(revertIndex, 1);
+                                }
+                                this._updateLikeButtonUI(false);
+                                this._updateSongLikeStateInLists(songId, false);
                             }
+                            
+                            // Update UI after revert
+                            this._saveToStorage();
+                            this._renderLikedSongs();
+                        }
+                    })
+                    .catch(error => {
+                        clearTimeout(timeoutId);
+                        console.error(`Error ${isInitiallyLiked ? 'unliking' : 'liking'} song in database:`, error);
+                        this._showNotification('Error updating server. Try again.', 'error');
+                        
+                        // Revert local state to match server
+                        if (isInitiallyLiked) {
+                            this.likedSongs.push(songObject);
+                            this._updateLikeButtonUI(true);
+                            this._updateSongLikeStateInLists(songId, true);
+                        } else {
+                            const revertIndex = this._findSongIndex(songId, songTitle, artistName);
+                            if (revertIndex !== -1) {
+                                this.likedSongs.splice(revertIndex, 1);
+                            }
+                            this._updateLikeButtonUI(false);
+                            this._updateSongLikeStateInLists(songId, false);
+                        }
+                        
+                        // Update UI after revert
+                        this._saveToStorage();
+                        this._renderLikedSongs();
+                    })
+                    .finally(() => {
+                        // Allow future like/unlike operations
+                        setTimeout(() => {
                             this.isProcessingLikeClick = false;
-                        })
-                        .catch(error => {
-                            console.error('Error liking song in database:', error);
-                            this._showNotification('Error updating server', 'error');
-                            this.isProcessingLikeClick = false;
-                        });
-                } else {
-                    // For non-authenticated users, just update local state
-                    this.likedSongs.push(songObject);
-                    this._saveToStorage();
-                    this._updateLikeButtonUI(true);
-                    this._updateSongLikeStateInLists(songId, true);
-                    this._renderLikedSongs();
-                    this._showNotification(`Added "${songTitle}" to Liked Songs`, 'success');
+                        }, 300); // Small delay to prevent accidental double-clicks
+                    });
+            } else {
+                // For non-authenticated users, just update local storage
+                this._saveToStorage();
+                this._renderLikedSongs();
+                
+                this._showNotification(
+                    isInitiallyLiked 
+                        ? `Removed "${songTitle}" from Liked Songs` 
+                        : `Added "${songTitle}" to Liked Songs`, 
+                    isInitiallyLiked ? 'info' : 'success'
+                );
+                
+                // Allow future like/unlike operations after a small delay
+                setTimeout(() => {
                     this.isProcessingLikeClick = false;
-                }
+                }, 300);
             }
         } catch (error) {
             console.error('Error in toggleLike:', error);
@@ -988,43 +1024,85 @@ class PlaylistManager {
      * @private
      */
     async _likeSongInDatabase(songId) {
-        try {
-            console.log(`Adding song ID "${songId}" to liked songs in database`);
-            
-            if (!songId) {
-                console.error('Cannot like song: No song ID provided');
+        const MAX_RETRIES = 2;
+        let retryCount = 0;
+        
+        while (retryCount <= MAX_RETRIES) {
+            try {
+                console.log(`Adding song ID "${songId}" to liked songs in database (attempt ${retryCount + 1})`);
+                
+                if (!songId) {
+                    console.error('Cannot like song: No song ID provided');
+                    return false;
+                }
+                
+                // Get auth token
+                const token = this._getAuthToken();
+                if (!token) {
+                    console.error('Cannot like song: No authentication token');
+                    return false;
+                }
+                
+                // Make API call to like song with timeout
+                const controller = new AbortController();
+                const timeoutId = setTimeout(() => controller.abort(), 8000); // 8 second timeout
+                
+                const response = await fetch('/api/like-song', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                        'Authorization': `Bearer ${token}`
+                    },
+                    body: JSON.stringify({ songId: songId }),
+                    signal: controller.signal
+                });
+                
+                clearTimeout(timeoutId);
+                
+                if (!response.ok) {
+                    const data = await response.json().catch(() => ({ error: 'Invalid JSON response' }));
+                    console.error('Error liking song in database:', data.error || response.statusText);
+                    
+                    // Handle specific error cases
+                    if (response.status === 401) {
+                        console.error('Authentication error - token may be invalid');
+                        return false; // Auth errors shouldn't retry
+                    }
+                    
+                    // For 5xx server errors, retry
+                    if (response.status >= 500 && retryCount < MAX_RETRIES) {
+                        console.log(`Server error, retrying (${retryCount + 1}/${MAX_RETRIES})...`);
+                        retryCount++;
+                        await new Promise(resolve => setTimeout(resolve, 1000 * (retryCount + 1))); // Exponential backoff
+                        continue;
+                    }
+                    
+                    return false;
+                }
+                
+                const data = await response.json().catch(() => ({ success: true }));
+                console.log('Successfully liked song in database:', data.message || 'Success');
+                return true;
+            } catch (error) {
+                console.error('Exception in _likeSongInDatabase:', error);
+                
+                // Handle abort/timeout
+                if (error.name === 'AbortError') {
+                    console.error('Database request timed out');
+                    
+                    if (retryCount < MAX_RETRIES) {
+                        console.log(`Request timed out, retrying (${retryCount + 1}/${MAX_RETRIES})...`);
+                        retryCount++;
+                        await new Promise(resolve => setTimeout(resolve, 1000)); // Wait before retry
+                        continue;
+                    }
+                }
+                
                 return false;
             }
-            
-            const token = this._getAuthToken();
-            if (!token) {
-                console.error('Cannot like song: No authentication token');
-                return false;
-            }
-            
-            // Make API call to like song
-            const response = await fetch('/api/like-song', {
-                method: 'POST',
-                headers: {
-                    'Content-Type': 'application/json',
-                    'Authorization': `Bearer ${token}`
-                },
-                body: JSON.stringify({ songId: songId })
-            });
-            
-            const data = await response.json();
-            
-            if (!response.ok) {
-                console.error('Error liking song in database:', data.error || 'Unknown error');
-                return false;
-            }
-            
-            console.log('Successfully liked song in database:', data.message || 'Success');
-            return true;
-        } catch (error) {
-            console.error('Exception in _likeSongInDatabase:', error);
-            return false;
         }
+        
+        return false; // If we exhausted retries
     }
     
     /**
@@ -1034,171 +1112,145 @@ class PlaylistManager {
      * @private
      */
     async _unlikeSongInDatabase(songId) {
-        try {
-            console.log(`Removing song ID "${songId}" from liked songs in database`);
-            
-            if (!songId) {
-                console.error('Cannot unlike song: No song ID provided');
+        const MAX_RETRIES = 2;
+        let retryCount = 0;
+        
+        while (retryCount <= MAX_RETRIES) {
+            try {
+                console.log(`Removing song ID "${songId}" from liked songs in database (attempt ${retryCount + 1})`);
+                
+                if (!songId) {
+                    console.error('Cannot unlike song: No song ID provided');
+                    return false;
+                }
+                
+                // Get auth token
+                const token = this._getAuthToken();
+                if (!token) {
+                    console.error('Cannot unlike song: No authentication token');
+                    return false;
+                }
+                
+                // Make API call to unlike song with timeout
+                const controller = new AbortController();
+                const timeoutId = setTimeout(() => controller.abort(), 8000); // 8 second timeout
+                
+                const response = await fetch('/api/unlike-song', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                        'Authorization': `Bearer ${token}`
+                    },
+                    body: JSON.stringify({ songId: songId }),
+                    signal: controller.signal
+                });
+                
+                clearTimeout(timeoutId);
+                
+                if (!response.ok) {
+                    const data = await response.json().catch(() => ({ error: 'Invalid JSON response' }));
+                    console.error('Error unliking song in database:', data.error || response.statusText);
+                    
+                    // Handle specific error cases
+                    if (response.status === 401) {
+                        console.error('Authentication error - token may be invalid');
+                        return false; // Auth errors shouldn't retry
+                    }
+                    
+                    // For 5xx server errors, retry
+                    if (response.status >= 500 && retryCount < MAX_RETRIES) {
+                        console.log(`Server error, retrying (${retryCount + 1}/${MAX_RETRIES})...`);
+                        retryCount++;
+                        await new Promise(resolve => setTimeout(resolve, 1000 * (retryCount + 1))); // Exponential backoff
+                        continue;
+                    }
+                    
+                    return false;
+                }
+                
+                const data = await response.json().catch(() => ({ success: true }));
+                console.log('Successfully unliked song in database:', data.message || 'Success');
+                return true;
+            } catch (error) {
+                console.error('Exception in _unlikeSongInDatabase:', error);
+                
+                // Handle abort/timeout
+                if (error.name === 'AbortError') {
+                    console.error('Database request timed out');
+                    
+                    if (retryCount < MAX_RETRIES) {
+                        console.log(`Request timed out, retrying (${retryCount + 1}/${MAX_RETRIES})...`);
+                        retryCount++;
+                        await new Promise(resolve => setTimeout(resolve, 1000)); // Wait before retry
+                        continue;
+                    }
+                }
+                
                 return false;
-            }
-            
-            const token = this._getAuthToken();
-            if (!token) {
-                console.error('Cannot unlike song: No authentication token');
-                return false;
-            }
-            
-            // Make API call to unlike song
-            const response = await fetch('/api/unlike-song', {
-                method: 'POST',
-                headers: {
-                    'Content-Type': 'application/json',
-                    'Authorization': `Bearer ${token}`
-                },
-                body: JSON.stringify({ songId: songId })
-            });
-            
-            const data = await response.json();
-            
-            if (!response.ok) {
-                console.error('Error unliking song in database:', data.error || 'Unknown error');
-                return false;
-            }
-            
-            console.log('Successfully unliked song in database:', data.message || 'Success');
-            return true;
-        } catch (error) {
-            console.error('Exception in _unlikeSongInDatabase:', error);
-            return false;
-        }
-    }
-    
-    // Helper method to extract the actual song ID from various sources
-    _extractActualSongId(src) {
-        // First try to get it from the audio player source
-        const audioPlayer = document.querySelector('audio');
-        if (audioPlayer && audioPlayer.src) {
-            // Try to extract from stream URL first (most reliable)
-            const streamMatch = audioPlayer.src.match(/\/api\/stream\/(\d+)/);
-            if (streamMatch && streamMatch[1]) {
-                console.log('Extracted ID from audio stream URL:', streamMatch[1]);
-                return streamMatch[1];
             }
         }
         
-        // Then try from the thumbnail
+        return false; // If we exhausted retries
+    }
+    
+    // Helper method to extract song ID from various formats
+    _extractSongId(src) {
+        if (!src) return null;
+        
+        console.log('Extracting song ID from src:', src);
+        
+        // Try the new API thumbnail format: /api/thumbnail/{songId}
+        const apiThumbnailMatch = src.match(/\/api\/thumbnail\/([^/?#]+)/);
+        if (apiThumbnailMatch && apiThumbnailMatch[1]) {
+            console.log('Extracted ID from API thumbnail:', apiThumbnailMatch[1]);
+            return apiThumbnailMatch[1];
+        }
+        
+        // Try B2 storage URL format: https://spotifyclonemp3.s3.eu-central-003.backblazeb2.com/thumbnails/{songId}.png
+        const b2Match = src.match(/\/thumbnails\/([^.]+)\.png/);
+        if (b2Match && b2Match[1]) {
+            console.log('Extracted ID from B2 storage URL:', b2Match[1]);
+            return b2Match[1];
+        }
+        
+        // Try static audio format
+        const staticMatch = src.match(/\/static\/audio\/([^.]+)/);
+        if (staticMatch && staticMatch[1]) {
+            console.log('Extracted ID from static audio:', staticMatch[1]);
+            return staticMatch[1];
+        }
+        
+        // Try direct number format
+        const numberMatch = src.match(/\/(\d+)\.(jpg|png)$/);
+        if (numberMatch && numberMatch[1]) {
+            console.log('Extracted ID from number format:', numberMatch[1]);
+            return numberMatch[1];
+        }
+        
+        // Try to extract just a numeric ID if it exists in the URL
+        const numericIdMatch = src.match(/(\d+)/);
+        if (numericIdMatch && numericIdMatch[1]) {
+            console.log('Extracted numeric ID:', numericIdMatch[1]);
+            return numericIdMatch[1];
+        }
+        
+        // Last resort - use the full URL hash
         if (src) {
-            // Try API thumbnail format
-            const apiMatch = src.match(/\/api\/thumbnail\/(\d+)/);
-            if (apiMatch && apiMatch[1]) {
-                console.log('Extracted ID from API thumbnail:', apiMatch[1]);
-                return apiMatch[1];
-            }
-            
-            // Try direct number format
-            const numberMatch = src.match(/\/(\d+)\.jpg$/);
-            if (numberMatch && numberMatch[1]) {
-                console.log('Extracted ID from image filename:', numberMatch[1]);
-                return numberMatch[1];
-            }
-            
-            // Try to extract just a numeric ID if it exists in the URL
-            const numericIdMatch = src.match(/(\d+)/);
-            if (numericIdMatch && numericIdMatch[1]) {
-                console.log('Extracted numeric ID:', numericIdMatch[1]);
-                return numericIdMatch[1];
-            }
+            const hash = src.split('').reduce((a, b) => {
+                a = ((a << 5) - a) + b.charCodeAt(0);
+                return a & a;
+            }, 0);
+            console.log('Generated hash ID:', Math.abs(hash).toString());
+            return Math.abs(hash).toString();
         }
         
-        // If we're here, we couldn't find a numeric ID
         return null;
-    }
-    
-    // Add helper methods for database operations
-    async _likeSongInDatabase(songId) {
-        try {
-            // Get auth token
-            const authToken = this._getAuthToken();
-            if (!authToken) {
-                console.warn('User not authenticated, skipping database like operation');
-                return true; // Return success for local-only operation
-            }
-            
-            const response = await fetch('/api/like-song', {
-                method: 'POST',
-                headers: {
-                    'Content-Type': 'application/json',
-                    'Authorization': `Bearer ${authToken}`
-                },
-                body: JSON.stringify({ songId })
-            });
-            
-            if (!response.ok) {
-                const errorData = await response.json();
-                throw new Error(errorData.error || 'Failed to like song in database');
-            }
-            
-            return await response.json();
-        } catch (error) {
-            console.error('Error liking song in database:', error);
-            return false;
-        }
-    }
-
-    async _unlikeSongInDatabase(songId) {
-        try {
-            // Get auth token
-            const authToken = this._getAuthToken();
-            if (!authToken) {
-                console.warn('User not authenticated, skipping database unlike operation');
-                return true; // Return success for local-only operation
-            }
-            
-            const response = await fetch('/api/unlike-song', {
-                method: 'POST',
-                headers: {
-                    'Content-Type': 'application/json',
-                    'Authorization': `Bearer ${authToken}`
-                },
-                body: JSON.stringify({ songId })
-            });
-            
-            if (!response.ok) {
-                const errorData = await response.json();
-                throw new Error(errorData.error || 'Failed to unlike song in database');
-            }
-            
-            return await response.json();
-        } catch (error) {
-            console.error('Error unliking song in database:', error);
-            return false;
-        }
-    }
-
-    /**
-     * Get authentication token for API requests
-     * @returns {string|null} - The authentication token or null if not authenticated
-     * @private
-     */
-    _getAuthToken() {
-        try {
-            // Import the getAuthToken function if available
-            if (typeof getAuthToken === 'function') {
-                return getAuthToken();
-            }
-            
-            // Fallback to direct localStorage access
-            return localStorage.getItem('supabase.auth.token');
-        } catch (error) {
-            console.error('Error getting auth token:', error);
-            return null;
-        }
     }
     
     // Add a new helper method to update song like state in all song lists
     _updateSongLikeStateInLists(songId, isLiked) {
         // Update heart icons in all song lists for this song
-        document.querySelectorAll('.song-row').forEach(row => {
+        document.querySelectorAll('.song-row, .song-card').forEach(row => {
             // Check if this row represents the toggled song
             const rowSongId = row.getAttribute('data-song-id');
             if (rowSongId === songId) {
@@ -1316,53 +1368,6 @@ class PlaylistManager {
             
             this._showNotification(`Removed "${song.title}" from Liked Songs`, 'info');
         }
-    }
-    
-    // Helper method to extract song ID from various formats
-    _extractSongId(src) {
-        if (!src) return null;
-        
-        console.log('Extracting song ID from src:', src);
-        
-        // Try API thumbnail format
-        const apiMatch = src.match(/\/api\/thumbnail\/(\d+)/);
-        if (apiMatch && apiMatch[1]) {
-            console.log('Extracted ID from API thumbnail:', apiMatch[1]);
-            return apiMatch[1];
-        }
-        
-        // Try static audio format
-        const staticMatch = src.match(/\/static\/audio\/([^.]+)/);
-        if (staticMatch && staticMatch[1]) {
-            console.log('Extracted ID from static audio:', staticMatch[1]);
-            return staticMatch[1];
-        }
-        
-        // Try direct number format
-        const numberMatch = src.match(/\/(\d+)\.jpg$/);
-        if (numberMatch && numberMatch[1]) {
-            console.log('Extracted ID from number format:', numberMatch[1]);
-            return numberMatch[1];
-        }
-        
-        // Try to extract just a numeric ID if it exists in the URL
-        const numericIdMatch = src.match(/(\d+)/);
-        if (numericIdMatch && numericIdMatch[1]) {
-            console.log('Extracted numeric ID:', numericIdMatch[1]);
-            return numericIdMatch[1];
-        }
-        
-        // Last resort - use the full URL hash
-        if (src) {
-            const hash = src.split('').reduce((a, b) => {
-                a = ((a << 5) - a) + b.charCodeAt(0);
-                return a & a;
-            }, 0);
-            console.log('Generated hash ID:', Math.abs(hash).toString());
-            return Math.abs(hash).toString();
-        }
-        
-        return null;
     }
     
     addSongToPlaylist(songId, playlistId) {
@@ -1601,117 +1606,204 @@ class PlaylistManager {
      * @returns {Promise<Array>} Array of liked songs
      */
     async _loadLikedSongsFromDatabase() {
-        if (!isAuthenticated()) return [];
+        console.log('Loading liked songs from database...');
         
+        // Check authentication status safely
+        let isUserAuthenticated = false;
         try {
-            const authToken = this._getAuthToken();
-            if (!authToken) return [];
-            
-            console.log('Loading liked songs from database');
-            
-            // Check if we've loaded songs in the last 5 minutes
-            const lastLikedSongsLoad = localStorage.getItem('lastLikedSongsLoad');
-            const likedSongsData = localStorage.getItem('likedSongs');
-            
-            if (lastLikedSongsLoad && likedSongsData) {
-                const timeSinceLastLoad = Date.now() - parseInt(lastLikedSongsLoad);
-                const FIVE_MINUTES = 5 * 60 * 1000; // 5 minutes in milliseconds
-                
-                if (timeSinceLastLoad < FIVE_MINUTES) {
-                    console.log('Using cached liked songs from localStorage (loaded within last 5 minutes)');
-                    try {
-                        return JSON.parse(likedSongsData);
-                    } catch (e) {
-                        console.error('Error parsing cached liked songs, will fetch new ones:', e);
-                    }
-                }
-            }
-            
-            // Fetch from API with caching headers
-            const response = await fetch('/api/liked-songs', {
-                headers: {
-                    'Authorization': `Bearer ${authToken}`,
-                    'Cache-Control': 'max-age=300' // Cache for 5 minutes
-                }
-            });
-            
-            if (response.ok) {
-                const data = await response.json();
-                if (data.songs && Array.isArray(data.songs)) {
-                    // Update the liked songs in storage with timestamp
-                    localStorage.setItem('likedSongs', JSON.stringify(data.songs));
-                    localStorage.setItem('lastLikedSongsLoad', Date.now().toString());
-                    
-                    return data.songs;
-                }
-            } else {
-                console.error('Error loading liked songs:', response.status, response.statusText);
-                throw new Error(`API Error: ${response.status} ${response.statusText}`);
-            }
-        } catch (error) {
-            console.error('Error loading liked songs from database:', error);
-            // Return empty array on error
+            isUserAuthenticated = typeof window.isAuthenticated === 'function' && window.isAuthenticated();
+        } catch (authError) {
+            console.error('Error checking authentication status:', authError);
+        }
+        
+        if (!isUserAuthenticated) {
+            console.log('User not authenticated, skipping database load');
             return [];
         }
         
-        return [];
-    }
-
-    /**
-     * Load liked songs from database and update UI
-     * This method handles formatting and updating the UI
-     */
-    async _loadLikedSongsIfAuthenticated() {
-        if (!isAuthenticated()) {
-            console.log('User not authenticated, skipping database load');
-            return;
-        }
-        
         try {
-            // Fetch the raw liked songs data
-            const likedSongsData = await this._loadLikedSongsFromDatabase();
-            
-            if (!likedSongsData || !Array.isArray(likedSongsData) || likedSongsData.length === 0) {
-                console.log('No liked songs data returned from database');
-                return;
+            const token = this._getAuthToken();
+            if (!token) {
+                console.error('Cannot load liked songs: No authentication token');
+                return [];
             }
             
-            console.log(`Loaded ${likedSongsData.length} liked songs from database`);
+            console.log('Fetching liked songs from API with auth token');
             
-            // Format songs to match our internal format
-            const formattedSongs = likedSongsData.map(song => ({
-                id: song.id.toString(),
+            // Add timeout and fetch options
+            const controller = new AbortController();
+            const timeoutId = setTimeout(() => controller.abort(), 10000); // 10 second timeout
+            
+            const response = await fetch('/api/liked-songs', {
+                headers: {
+                    'Authorization': `Bearer ${token}`,
+                    'Cache-Control': 'no-cache, no-store, must-revalidate'
+                },
+                signal: controller.signal
+            });
+            
+            clearTimeout(timeoutId);
+            
+            if (!response.ok) {
+                let errorData = { error: response.statusText };
+                try {
+                    errorData = await response.json();
+                } catch (jsonError) {
+                    console.warn('Could not parse error response as JSON');
+                }
+                
+                console.error('Error fetching liked songs:', errorData.error || response.statusText);
+                return [];
+            }
+            
+            // Safely parse response data
+            let data;
+            try {
+                data = await response.json();
+                console.log('Raw liked songs API response:', JSON.stringify(data).substring(0, 300) + '...');
+            } catch (parseError) {
+                console.error('Failed to parse API response as JSON:', parseError);
+                return [];
+            }
+            
+            // Check API response structure and success flag
+            if (typeof data !== 'object') {
+                console.error('Invalid API response: not an object');
+                return [];
+            }
+            
+            if (data.success === false) {
+                console.error('API reported error:', data.error || 'Unknown error');
+                return [];
+            }
+            
+            // Verify songs array exists and has content
+            if (!data.songs || !Array.isArray(data.songs)) {
+                console.warn('No songs array in API response or invalid format');
+                return [];
+            }
+            
+            console.log(`API returned ${data.songs.length} liked songs`);
+            
+            // Additional validation of song data
+            const songsWithValidIds = data.songs.filter(song => song && song.id);
+            if (songsWithValidIds.length !== data.songs.length) {
+                console.warn(`Found ${data.songs.length - songsWithValidIds.length} songs without valid IDs`);
+            }
+            
+            // Format songs for consistency, ensuring we don't filter out songs without thumbnails
+            const formattedSongs = songsWithValidIds.map(song => ({
+                id: String(song.id),
                 title: song.title || 'Unknown Title',
                 artist: song.artist || 'Unknown Artist',
                 album: song.album || 'Unknown Album',
                 duration: song.duration || 0,
+                // Store the thumbnail URL if it exists, but don't filter out songs without one
                 thumbnailUrl: song.thumbnail_url || null
             }));
             
-            // Replace our local data only if we got songs from the database
+            console.log(`Formatted ${formattedSongs.length} liked songs with ids:`, 
+                        formattedSongs.slice(0, 5).map(s => s.id).join(', ') + 
+                        (formattedSongs.length > 5 ? '...' : ''));
+            
             if (formattedSongs.length > 0) {
+                // Update our local liked songs array with ALL songs, regardless of thumbnail
                 this.likedSongs = formattedSongs;
                 
-                // Update localStorage with the latest data
+                // Save to localStorage immediately to preserve data
                 this._saveToStorage();
                 
-                // Only update the UI if this view is active to avoid unnecessary DOM operations
-                const likedView = document.getElementById('liked-view');
-                if (likedView && likedView.classList.contains('active')) {
-                    this._renderLikedSongs();
-                }
-                
-                // Update the like button state if a song is currently playing
+                // Trigger UI updates
+                this._renderLikedSongs();
+                this._updateAllSongLikeStates();
                 this._updateCurrentSongLikeState();
                 
-                // Load liked songs into the main SongListManager for playback if available
-                if (window.app && window.app.songListManager) {
-                    window.app.songListManager.loadLikedSongs(formattedSongs);
-                }
+                console.log(`Successfully updated liked songs in memory with ${formattedSongs.length} songs`);
+            } else {
+                console.warn('No valid liked songs found in API response');
             }
+            
+            return formattedSongs;
         } catch (error) {
-            console.error('Error in _loadLikedSongsIfAuthenticated:', error);
+            console.error('Exception in _loadLikedSongsFromDatabase:', error);
+            // Don't modify the current songs array on error - maintain current state
+            return [];
         }
+    }
+
+    /**
+     * Load liked songs if the user is authenticated
+     * @private
+     */
+    async _loadLikedSongsIfAuthenticated() {
+        console.log('Checking authentication status for liked songs...');
+        
+        // Render any existing liked songs immediately for better user experience
+        if (Array.isArray(this.likedSongs) && this.likedSongs.length > 0) {
+            console.log(`Rendering ${this.likedSongs.length} existing liked songs while checking authentication`);
+            this._renderLikedSongs();
+        }
+        
+        // Safe check for authentication module
+        let isUserAuthenticated = false;
+        let retryCount = 0;
+        const maxRetries = 3;
+        
+        // Try to get authentication status, with retry for race conditions
+        while (retryCount < maxRetries) {
+            if (typeof window.isAuthenticated === 'function') {
+                try {
+                    isUserAuthenticated = window.isAuthenticated();
+                    break;
+                } catch (authError) {
+                    console.warn(`Auth check attempt ${retryCount + 1} failed:`, authError);
+                }
+            } else {
+                console.log(`Auth function not available yet (attempt ${retryCount + 1}/${maxRetries})`);
+            }
+            
+            retryCount++;
+            if (retryCount < maxRetries) {
+                // Wait before retrying
+                await new Promise(resolve => setTimeout(resolve, 500));
+            }
+        }
+        
+        console.log(`Authentication check complete: User ${isUserAuthenticated ? 'is' : 'is not'} authenticated`);
+        
+        // Load liked songs based on authentication status
+        if (isUserAuthenticated) {
+            try {
+                console.log('User is authenticated, loading liked songs from database');
+                const dbSongs = await this._loadLikedSongsFromDatabase();
+                
+                if (Array.isArray(dbSongs) && dbSongs.length > 0) {
+                    console.log(`Loaded ${dbSongs.length} liked songs from database`);
+                    
+                    // If we have songs from the database but none in memory, use the database songs
+                    if (!Array.isArray(this.likedSongs) || this.likedSongs.length === 0) {
+                        this.likedSongs = dbSongs;
+                        this._saveToStorage();
+                    }
+                    
+                    // Force a UI update with the latest data
+                    this._renderLikedSongs();
+                } else {
+                    console.log('No liked songs found in database');
+                }
+            } catch (error) {
+                console.error('Error loading liked songs from database:', error);
+                // Fall back to localStorage on error
+                this._loadFromStorage();
+            }
+        } else {
+            console.log('User is not authenticated, using liked songs from localStorage only');
+            // For non-authenticated users, just use localStorage
+            this._loadFromStorage();
+        }
+        
+        // Always render the liked songs to ensure we show what we have
+        this._renderLikedSongs();
     }
 
     /**
@@ -1742,7 +1834,7 @@ class PlaylistManager {
                 const isLiked = this.likedSongs.some(song => song && song.id === songId);
                 console.log(`Current song ID ${songId} is liked: ${isLiked}`);
                 this._updateLikeButtonUI(isLiked);
-                return isLiked;
+        return isLiked;
             }
             
             // If ID not found, try by title/artist
@@ -1890,81 +1982,9 @@ class PlaylistManager {
      * @private
      */
     _showClearAllConfirmation() {
-        // Create a modal confirmation dialog
-        const confirmationModal = document.createElement('div');
-        confirmationModal.className = 'modal confirmation-modal';
-        confirmationModal.style.display = 'flex';
-        
-        confirmationModal.innerHTML = `
-            <div class="modal-content">
-                <div class="modal-header">
-                    <h2>Clear All Liked Songs</h2>
-                    <span class="close-modal">&times;</span>
-                </div>
-                <div class="modal-body">
-                    <p>Are you sure you want to remove all ${this.likedSongs.length} liked songs? This action cannot be undone.</p>
-                    <div class="confirmation-buttons">
-                        <button class="btn-cancel">Cancel</button>
-                        <button class="btn-confirm btn-danger">Clear All</button>
-                    </div>
-                </div>
-            </div>
-        `;
-        
-        // Add to document
-        document.body.appendChild(confirmationModal);
-        
-        // Set up event listeners
-        const closeBtn = confirmationModal.querySelector('.close-modal');
-        const cancelBtn = confirmationModal.querySelector('.btn-cancel');
-        const confirmBtn = confirmationModal.querySelector('.btn-confirm');
-        
-        // Function to close the modal
-        const closeModal = () => {
-            confirmationModal.style.opacity = '0';
-            setTimeout(() => {
-                confirmationModal.remove();
-            }, 300);
-        };
-        
-        closeBtn.addEventListener('click', closeModal);
-        cancelBtn.addEventListener('click', closeModal);
-        
-        // Clear all when confirmed
-        confirmBtn.addEventListener('click', async () => {
-            // Show loading state
-            confirmBtn.disabled = true;
-            confirmBtn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Clearing...';
-            
-            try {
-                await this.clearAllLikedSongs();
-                closeModal();
-            } catch (error) {
-                console.error('Error clearing liked songs:', error);
-                confirmBtn.disabled = false;
-                confirmBtn.innerHTML = 'Clear All';
-                
-                // Show error inside the modal
-                const errorMsg = document.createElement('div');
-                errorMsg.className = 'error-message';
-                errorMsg.textContent = 'Failed to clear liked songs. Please try again.';
-                
-                const modalBody = confirmationModal.querySelector('.modal-body');
-                modalBody.appendChild(errorMsg);
-            }
-        });
-        
-        // Close when clicking outside
-        confirmationModal.addEventListener('click', (e) => {
-            if (e.target === confirmationModal) {
-                closeModal();
-            }
-        });
-        
-        // Fade in animation
-        setTimeout(() => {
-            confirmationModal.style.opacity = '1';
-        }, 10);
+        if (confirm('Are you sure you want to remove all your liked songs? This action cannot be undone.')) {
+            this._clearAllLikedSongs();
+        }
     }
 
     /**
@@ -2013,19 +2033,43 @@ class PlaylistManager {
         console.log('Authentication state changed, refreshing liked songs');
         
         try {
-            if (typeof isAuthenticated === 'function' && isAuthenticated()) {
+            // First determine authentication state safely
+            let isUserAuthenticated = false;
+            try {
+                isUserAuthenticated = typeof window.isAuthenticated === 'function' 
+                    ? window.isAuthenticated() 
+                    : false;
+            } catch (authError) {
+                console.error('Error checking authentication:', authError);
+            }
+            
+            if (isUserAuthenticated) {
                 // User logged in, load their liked songs from database
                 console.log('User logged in, loading liked songs from database');
                 
                 // Clear previous liked songs first to avoid mixing data
                 this.likedSongs = [];
                 
+                // Update UI to show loading state
+                this._renderLikedSongs();
+                this._updateAllSongLikeStates();
+                
                 // Load from database
-                const songs = await this.loadLikedSongsFromDatabase();
+                const songs = await this._loadLikedSongsFromDatabase();
                 console.log(`Loaded ${songs.length} liked songs from database after login`);
                 
                 if (songs.length > 0) {
                     this._showNotification(`Loaded ${songs.length} liked songs from your account`, 'success');
+                    
+                    // Also load into SongListManager for main player if available
+                    if (window.musicPlayer && window.musicPlayer.songListManager) {
+                        try {
+                            window.musicPlayer.songListManager.loadLikedSongs(songs);
+                            console.log('Updated main player with liked songs');
+                        } catch (loadError) {
+                            console.error('Error loading liked songs into main player:', loadError);
+                        }
+                    }
                 }
             } else {
                 // User logged out, clear liked songs
@@ -2037,6 +2081,16 @@ class PlaylistManager {
                 // Update UI
                 this._updateAllSongLikeStates();
                 this._updateCurrentSongLikeState();
+                
+                // Also update the SongListManager
+                if (window.musicPlayer && window.musicPlayer.songListManager) {
+                    try {
+                        window.musicPlayer.songListManager.loadLikedSongs([]);
+                        console.log('Updated main player with empty liked songs');
+                    } catch (loadError) {
+                        console.error('Error updating main player liked songs:', loadError);
+                    }
+                }
             }
             
             return true;
@@ -2047,72 +2101,40 @@ class PlaylistManager {
     }
 
     /**
-     * Load liked songs from the database for the authenticated user
-     * @returns {Promise<boolean>} True if successful, false otherwise
+     * Get the authentication token from the auth module
+     * @returns {string|null} The auth token or null if not authenticated
      */
-    async loadLikedSongsFromDatabase() {
-        console.log('Loading liked songs from database...');
-        
-        if (!isAuthenticated()) {
-            console.log('User not authenticated, skipping database load');
-            return [];
-        }
-        
+    _getAuthToken() {
+        console.log('Getting auth token');
         try {
-            const token = this._getAuthToken();
-            if (!token) {
-                console.error('Cannot load liked songs: No authentication token');
-                return [];
+            // First check if the function exists in window scope
+            if (typeof window.getAuthToken === 'function') {
+                return window.getAuthToken();
             }
             
-            console.log('Fetching liked songs from API with auth token');
-            
-            const response = await fetch('/api/liked-songs', {
-                headers: {
-                    'Authorization': `Bearer ${token}`
-                }
-            });
-            
-            if (!response.ok) {
-                const errorData = await response.json();
-                console.error('Error fetching liked songs:', errorData.error || response.statusText);
-                return [];
+            // Try getting from auth module if imported directly
+            if (typeof getAuthToken === 'function') {
+                return getAuthToken();
             }
             
-            const data = await response.json();
-            
-            if (!data.success) {
-                console.error('API reported error:', data.error || 'Unknown error');
-                return [];
+            // Fallback to localStorage if necessary
+            const token = localStorage.getItem('auth_token');
+            if (token) {
+                console.log('Retrieved token from localStorage');
+                return token;
             }
             
-            console.log(`Successfully loaded ${data.songs?.length || 0} liked songs from database`);
-            console.log('Database debug info:', data.debug || {});
+            console.warn('No auth token available');
+            return null;
+        } catch (err) {
+            console.error('Error getting auth token:', err);
             
-            if (!data.songs || !Array.isArray(data.songs)) {
-                console.warn('No songs array in response or invalid format');
-                return [];
+            // Last resort fallback to localStorage
+            try {
+                return localStorage.getItem('auth_token') || null;
+            } catch (e) {
+                return null;
             }
-            
-            // Update our local liked songs array
-            this.likedSongs = data.songs;
-            
-            // Update UI
-            this._renderLikedSongs();
-            
-            // Update local storage
-            this._saveToStorage();
-            
-            // Update all visible song like states
-            this._updateAllSongLikeStates();
-            
-            // Also update the currently playing song's like state if applicable
-            this._updateCurrentSongLikeState();
-            
-            return data.songs;
-        } catch (error) {
-            console.error('Exception in loadLikedSongsFromDatabase:', error);
-            return [];
         }
     }
 
@@ -2122,19 +2144,20 @@ class PlaylistManager {
      */
     _updateAllSongLikeStates() {
         try {
-            // Get all song rows in the document
-            const songRows = document.querySelectorAll('.song-row[data-song-id]');
+            // Get all song rows and cards in the document
+            const songElements = document.querySelectorAll('.song-row[data-song-id], .song-card[data-song-id]');
+            console.log(`Updating like states for ${songElements.length} song elements`);
             
-            // Process each song row
-            songRows.forEach(row => {
-                const songId = row.getAttribute('data-song-id');
+            // Process each song element
+            songElements.forEach(element => {
+                const songId = element.getAttribute('data-song-id');
                 if (songId) {
                     // Check if this song is liked
                     const isLiked = this.likedSongs.some(song => song && song.id === songId);
                     
                     // Update UI for this row
-                    const heartIcon = row.querySelector('.heart-icon, .fa-heart');
-                    const likeButton = row.querySelector('.like-button');
+                    const heartIcon = element.querySelector('.heart-icon, .fa-heart');
+                    const likeButton = element.querySelector('.like-button');
                     
                     if (heartIcon) {
                         if (isLiked) {
@@ -2156,10 +2179,156 @@ class PlaylistManager {
             
             // Update the main player's like button
             if (window.musicPlayer && window.musicPlayer.currentSong) {
-                window.musicPlayer.updateLikeStatus(window.musicPlayer.currentSong.id);
+                this._updateLikeButtonState(window.musicPlayer.currentSong.id);
             }
         } catch (error) {
             console.error('Error updating all song like states:', error);
+        }
+    }
+
+    /**
+     * Set up a mutation observer to find the liked songs container when it becomes available
+     * @private
+     */
+    _setupContainerObserver() {
+        const observer = new MutationObserver((mutations) => {
+            for (const mutation of mutations) {
+                if (mutation.type === 'childList' && mutation.addedNodes.length) {
+                    const container = document.getElementById('liked-songs-list');
+                    if (container) {
+                        this.likedSongsContainer = container;
+                        console.log('Liked songs container found');
+                        observer.disconnect();
+                        
+                        // Now that we have the container, render the liked songs
+                        this._renderLikedSongs();
+                        this.containerUpdated = true;
+                        break;
+                    }
+                }
+            }
+        });
+        
+        observer.observe(document.body, { childList: true, subtree: true });
+        console.log('Container observer setup complete');
+    }
+
+    /**
+     * Initialize liked songs from localStorage without clearing existing data
+     * @private
+     */
+    _initializeFromStorage() {
+        try {
+            const storedSongs = localStorage.getItem('likedSongs');
+            if (storedSongs) {
+                const parsedSongs = JSON.parse(storedSongs);
+                if (Array.isArray(parsedSongs) && parsedSongs.length > 0) {
+                    this.likedSongs = parsedSongs;
+                    console.log(`Loaded ${parsedSongs.length} liked songs from localStorage`);
+                } else {
+                    console.log('No liked songs found in localStorage');
+                }
+            } else {
+                console.log('No liked songs entry in localStorage');
+            }
+        } catch (error) {
+            console.error('Error loading liked songs from localStorage:', error);
+        }
+        
+        // Load liked songs from database if the user is authenticated
+        this._loadLikedSongsIfAuthenticated();
+    }
+
+    /**
+     * Handle liked view activation
+     * @private
+     */
+    _handleLikedViewActivated() {
+        console.log('Liked view activated with', this.likedSongs.length, 'songs');
+        
+        // If the container was not found during initialization, try to find it now
+        if (!this.likedSongsContainer) {
+            this.likedSongsContainer = document.getElementById('liked-songs-list');
+            if (this.likedSongsContainer) {
+                this.containerUpdated = true;
+            } else {
+                console.error('Liked songs container still not found');
+                return;
+            }
+        }
+        
+        // Render the liked songs again just to ensure we're showing all of them
+        this._renderLikedSongs();
+        
+        // Refresh from database if authenticated
+        if (typeof window.isAuthenticated === 'function' && window.isAuthenticated()) {
+            this._loadLikedSongsFromDatabase()
+                .then(songs => {
+                    console.log(`Refreshed ${songs.length} liked songs from database`);
+                })
+                .catch(error => {
+                    console.error('Error refreshing liked songs:', error);
+                });
+        }
+    }
+
+    /**
+     * Clear all liked songs
+     * @private
+     */
+    _clearAllLikedSongs() {
+        if (confirm('Are you sure you want to clear all liked songs?')) {
+            console.log('Clearing all liked songs');
+            this.likedSongs = [];
+            this._saveToStorage();
+            this._renderLikedSongs();
+            
+            // If user is authenticated, also clear likes from the database
+            if (typeof window.isAuthenticated === 'function' && window.isAuthenticated()) {
+                try {
+                    const token = this._getAuthToken();
+                    if (token) {
+                        fetch('/api/clear-all-likes', {
+                            method: 'POST',
+                            headers: {
+                                'Authorization': `Bearer ${token}`,
+                                'Content-Type': 'application/json'
+                            }
+                        })
+                        .then(response => {
+                            if (response.ok) {
+                                console.log('Successfully cleared all likes from database');
+                            } else {
+                                console.error('Failed to clear likes from database');
+                            }
+                        })
+                        .catch(error => {
+                            console.error('Error clearing likes from database:', error);
+                        });
+                    }
+                } catch (error) {
+                    console.error('Error during database likes clearing:', error);
+                }
+            }
+        }
+    }
+
+    /**
+     * Get the authentication token
+     * @private
+     * @returns {string|null} The authentication token or null if not available
+     */
+    _getAuthToken() {
+        try {
+            if (typeof window.getAuthToken === 'function') {
+                return window.getAuthToken();
+            } else {
+                // Fallback: Try to get from localStorage directly
+                return localStorage.getItem('authToken');
+            }
+        } catch (error) {
+            console.error('Error getting auth token:', error);
+            return null;
         }
     }
 }

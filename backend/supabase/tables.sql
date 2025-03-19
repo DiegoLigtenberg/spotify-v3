@@ -14,7 +14,7 @@ CREATE TABLE IF NOT EXISTS public.songs (
     source_url TEXT,  -- Source URL (e.g., YouTube video URL)
     youtube_url TEXT, -- Direct YouTube URL
     storage_path TEXT NOT NULL,  -- Relative path in B2 (e.g., "audio/0169512.mp3")
-    thumbnail_path TEXT NOT NULL,  -- Relative path in B2 (e.g., "thumbnails/0169512.webp")
+    thumbnail_path TEXT NOT NULL,  -- Relative path in B2 (e.g., "thumbnails/0169512.png")
     storage_url TEXT NOT NULL,  -- Full B2 URL for audio
     thumbnail_url TEXT NOT NULL,  -- Full B2 URL for thumbnail
     created_at TIMESTAMP WITH TIME ZONE DEFAULT TIMEZONE('utc'::text, NOW()),

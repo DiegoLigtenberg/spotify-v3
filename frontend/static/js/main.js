@@ -445,14 +445,10 @@ class MusicPlayer {
         // Initialize UI manager
         this.uiManager = new UIManager();
         
-        // Initialize audio player
-        this.audioPlayer = new AudioPlayer();
-        this.audioPlayer.onPlay = () => this.handlePlayEvent();
-        this.audioPlayer.onEnded = () => this.handleEndEvent();
-        this.audioPlayer.onError = (error) => this.handleErrorEvent(error);
-        
-        // Add custom event for song changes
-        this.audioPlayer.eventListeners.songChanged = [];
+        // Initialize audio player components and state
+        this.audio = new Audio();
+        this.isLoading = false; // Add loading state flag
+        this.currentAbortController = null; // For aborting fetch requests
         
         // Initialize song list manager with elements and config
         this.songListContainer = document.querySelector('.songs-container');
@@ -469,110 +465,46 @@ class MusicPlayer {
         this.isPlaying = false;
         this.currentSong = null;
         this.currentSongIndex = -1;
+        this.recentlyPlayed = [];
+        this.recentRandoms = new Set();
+        
+        // Configure audio state
+        this.shuffleEnabled = false;
+        this.repeatEnabled = false;
         
         // Set up event handlers
         this.setupEventListeners();
     }
 
     setupEventListeners() {
-        // Audio player events
-        this.audioPlayer.addEventListener('timeupdate', () => {
-            // Update UI based on our reliable position tracker
-            this.uiManager.updateProgress(
-                this.audioPlayer.currentTime,
-                this.audioPlayer.duration
-            );
+        // Set up audio event listeners for progress and time updates
+        this.audio.addEventListener('timeupdate', () => {
+            if (!this.audio.duration) return;
+            const currentTime = this.audio.currentTime;
+            const duration = this.audio.duration;
+            this.uiManager.updateProgress(currentTime, duration);
         });
 
-        // Listen for song changed events to update like button state
-        this.audioPlayer.addEventListener('songChanged', (event) => {
-            if (event && event.songId) {
-                console.log('Song changed event detected, updating like button state for song ID:', event.songId);
-                
-                // Create a centralized approach to updating like button state
-                this._updateSongLikeState(event.songId);
-            }
+        this.audio.addEventListener('ended', () => {
+            console.log('Song ended, playing next');
+            this.playNext();
         });
 
-        this.audioPlayer.addEventListener('ended', () => {
-            if (this.shuffleEnabled) {
-                this.playRandomSong();
-            } else if (this.currentSongIndex < this.songListManager.songs.length - 1) {
-                this.playSong(this.songListManager.songs[this.currentSongIndex + 1]);
-            }
+        this.audio.addEventListener('error', (e) => {
+            console.error('Audio error:', e);
+            this.uiManager.showNotification('Error playing song', 'error');
+            this.isLoading = false;
         });
 
-        this.audioPlayer.addEventListener('error', (e) => {
-            console.error('Audio playback error:', e);
-            
-            // Get more detailed error information if available
-            let errorMessage = 'Error playing the song.';
-            if (e.error && e.error.message) {
-                errorMessage += ' ' + e.error.message;
-            } else if (e.error && e.error.code) {
-                // Translate error codes to user-friendly messages
-                switch (e.error.code) {
-                    case 1: // MEDIA_ERR_ABORTED
-                        errorMessage = 'Playback aborted by the system.';
-                        break;
-                    case 2: // MEDIA_ERR_NETWORK
-                        errorMessage = 'Network error occurred during playback. Please check your connection.';
-                        break;
-                    case 3: // MEDIA_ERR_DECODE
-                        errorMessage = 'Unable to decode the audio. The file might be corrupted.';
-                        break;
-                    case 4: // MEDIA_ERR_SRC_NOT_SUPPORTED
-                        errorMessage = 'Audio format not supported by your browser.';
-                        break;
-                    default:
-                        errorMessage = 'Unknown playback error occurred.';
-                }
-            }
-            
-            // Show error message to user
-            this.uiManager.showNotification(errorMessage, 'error');
-            
-            // Try again after a short delay for network-related errors
-            if (e.error && e.error.code === 2) {
-                setTimeout(() => {
-                    if (this.currentSongIndex >= 0 && this.songListManager.songs[this.currentSongIndex]) {
-                        console.log('Retrying playback after network error...');
-                        this.playSong(this.songListManager.songs[this.currentSongIndex]);
-                    }
-                }, 3000);
-            }
-        });
-
-        // Listen for play events
-        this.audioPlayer.addEventListener('play', () => {
+        this.audio.addEventListener('play', () => {
             this.uiManager.updatePlayPauseButton(true);
         });
 
-        // Listen for pause events
-        this.audioPlayer.addEventListener('pause', () => {
+        this.audio.addEventListener('pause', () => {
             this.uiManager.updatePlayPauseButton(false);
         });
 
-        // Listen for seek events
-        this.audioPlayer.addEventListener('seek', (e) => {
-            console.log('Received seek event with position:', this.formatTime(e.position));
-            
-            // Update UI immediately with the new position
-            this.uiManager.updateProgress(
-                e.position,
-                this.audioPlayer.duration
-            );
-            
-            this.seekInProgress = false;
-        });
-
-        // Add repeat change event listener
-        this.audioPlayer.addEventListener('repeatChanged', (e) => {
-            console.log('Repeat state changed:', e.isRepeatEnabled);
-            this.uiManager.updateRepeatButton(e.isRepeatEnabled);
-        });
-
-        // UI event handlers
+        // Connect UI manager events to audio controls
         this.uiManager.onPlayPauseClick = () => this.handlePlayPause();
         this.uiManager.onPreviousClick = () => this.playPrevious();
         this.uiManager.onNextClick = () => this.playNext();
@@ -584,56 +516,41 @@ class MusicPlayer {
         this.uiManager.onShuffleToggle = () => this.toggleShuffle();
         
         // Add like toggle handler
-        this.uiManager.onLikeToggle = () => {
-            console.log('Like button clicked in UI');
-            this.toggleLike();
-        };
-        
-        // Add view change handler
-        this.uiManager.onViewChange = (view) => {
-            console.log('Changing view to:', view);
-            this.changeView(view);
-        };
-        
-        // Add album art click handler for metadata panel
-        this.uiManager.onAlbumArtClick = () => {
-            console.log('Album art clicked, showing metadata panel');
-            this.showSongMetadata();
-        };
+        this.uiManager.onLikeToggle = () => this.toggleLike();
         
         this.uiManager.onProgressClick = (position) => {
-            if (!this.currentSong || !this.audioPlayer.duration) return;
+            if (!this.audio.duration) return;
             
-            // Mark that we're in the middle of a seek operation
-            this.seekInProgress = true;
+            // Prevent seeking if still loading
+            if (this.isLoading) {
+                console.log('Song is still loading, ignoring seek request');
+                return;
+            }
             
-            // Calculate the target time
-            const seekTime = position * this.audioPlayer.duration;
-            console.log('UI Progress click seeking to:', this.formatTime(seekTime));
-            
-            // Use our reliable seek method
-            this.audioPlayer.seek(seekTime);
+            const seekTime = position * this.audio.duration;
+            this.audio.currentTime = seekTime;
+            this.uiManager.updateProgress(seekTime, this.audio.duration);
         };
+        
         this.uiManager.onVolumeChange = (volume) => {
-            this.audioPlayer.volume = volume;
+            this.audio.volume = volume;
             this.uiManager.updateVolume(volume);
         };
-        this.uiManager.onSearch = (searchTerm) => {
-            const filteredSongs = this.songListManager.filterSongs(searchTerm);
-            this.displaySongs(filteredSongs);
-        };
-
-        // Override SongListManager's displaySongs method
-        this.songListManager.displaySongs = () => {
-            this.displaySongs(this.songListManager.songs);
-        };
-    }
-
-    formatTime(seconds) {
-        seconds = Math.floor(seconds);
-        const minutes = Math.floor(seconds / 60);
-        seconds = seconds % 60;
-        return `${minutes.toString().padStart(2, '0')}:${seconds.toString().padStart(2, '0')}`;
+        
+        // Set up song click listeners
+        document.addEventListener('click', (event) => {
+            // Handle song card clicks
+            const songCard = event.target.closest('.song-card');
+            if (songCard) {
+                const songId = songCard.dataset.songId;
+                if (songId) {
+                    const song = this.songListManager.songs.find(s => s.id === songId);
+                    if (song) {
+                        this.playSong(song);
+                    }
+                }
+            }
+        });
     }
 
     async initializeApplication() {
@@ -791,17 +708,43 @@ class MusicPlayer {
 
     // Add a method to preload thumbnails
     _preloadThumbnails() {
-        // Preload the first 10 thumbnails
+        // Only preload a limited number of thumbnails to avoid overwhelming the browser
         console.log('Preloading thumbnails for better performance...');
-        const songsToPreload = this.songListManager.songs.slice(0, 10);
+        const songsToPreload = this.songListManager.songs.slice(0, 5);
         
-        songsToPreload.forEach(song => {
+        // Use a queue system to load images one at a time
+        let loadIndex = 0;
+        const loadNextThumbnail = () => {
+            if (loadIndex >= songsToPreload.length) return;
+            
+            const song = songsToPreload[loadIndex++];
             if (song && song.id) {
                 const img = new Image();
+                // Add timestamp to prevent caching issues
                 img.src = `/api/thumbnail/${song.id}?t=${Date.now()}`;
-                console.log('Preloading thumbnail:', img.src);
+                img.onload = () => {
+                    console.log(`Successfully preloaded thumbnail for song ${song.id}`);
+                    // Update any visible instances of this thumbnail
+                    document.querySelectorAll(`[data-song-id="${song.id}"] img`).forEach(imgElement => {
+                        imgElement.src = img.src;
+                        imgElement.classList.add('loaded');
+                    });
+                    // Load the next one
+                    setTimeout(loadNextThumbnail, 100);
+                };
+                img.onerror = () => {
+                    console.warn(`Failed to preload thumbnail for song ${song.id}`);
+                    // Still try to load the next one
+                    setTimeout(loadNextThumbnail, 100);
+                };
+            } else {
+                // Skip and move to next
+                setTimeout(loadNextThumbnail, 10);
             }
-        });
+        };
+        
+        // Start the loading queue
+        loadNextThumbnail();
     }
 
     displaySongs(songs) {
@@ -813,7 +756,7 @@ class MusicPlayer {
         
         container.innerHTML = '';
         
-        if (songs.length === 0) {
+        if (!songs || songs.length === 0) {
             const emptyMessage = document.createElement('div');
             emptyMessage.className = 'empty-songs-message';
             emptyMessage.textContent = 'No songs found';
@@ -821,54 +764,200 @@ class MusicPlayer {
             return;
         }
         
+        // Limit the number of songs rendered at once to improve performance
+        const MAX_SONGS_TO_RENDER = 50;
+        const songsToRender = songs.slice(0, MAX_SONGS_TO_RENDER);
+        const remainingSongs = songs.slice(MAX_SONGS_TO_RENDER);
+        
         // Use a document fragment for better performance
         const fragment = document.createDocumentFragment();
         
-        songs.forEach(song => {
+        songsToRender.forEach(song => {
+            if (!song) return; // Skip invalid songs
+            
             const songElement = this.uiManager.createSongElement(
                 song,
                 this.currentSong && song.id === this.currentSong.id
             );
-            songElement.addEventListener('click', () => this.playSong(song));
-            fragment.appendChild(songElement);
+            
+            if (songElement) {
+                songElement.addEventListener('click', () => {
+                    this.playSong(song);
+                });
+                fragment.appendChild(songElement);
+            }
         });
         
-        // Add all songs at once for better performance
+        // Add the fragment to the container
         container.appendChild(fragment);
         
-        // Lazy load images as they come into view
+        // Setup for infinite scrolling if there are more songs
+        if (remainingSongs.length > 0) {
+            // Create a sentinel element to detect when to load more
+            const sentinel = document.createElement('div');
+            sentinel.className = 'load-more-sentinel';
+            sentinel.style.height = '20px';
+            sentinel.style.width = '100%';
+            container.appendChild(sentinel);
+            
+            // Set up the intersection observer for infinite scrolling
+            const observerOptions = {
+                root: null,
+                rootMargin: '0px',
+                threshold: 0.1
+            };
+            
+            // Keep track of if we're already loading to prevent multiple loads
+            let isLoadingMore = false;
+            
+            const loadMoreObserver = new IntersectionObserver((entries) => {
+                entries.forEach(entry => {
+                    if (entry.isIntersecting && !isLoadingMore) {
+                        isLoadingMore = true;
+                        console.log('Loading more songs as user scrolled down');
+                        
+                        // Load the next batch with a small delay to not block the UI
+                        setTimeout(() => {
+                            // Remove the sentinel
+                            sentinel.remove();
+                            
+                            // Determine how many more songs to load
+                            const nextBatch = remainingSongs.splice(0, 20);
+                            
+                            // Add the next batch
+                            const batchFragment = document.createDocumentFragment();
+                            nextBatch.forEach(song => {
+                                if (!song) return;
+                                
+                                const songElement = this.uiManager.createSongElement(
+                                    song,
+                                    this.currentSong && song.id === this.currentSong.id
+                                );
+                                
+                                if (songElement) {
+                                    songElement.addEventListener('click', () => {
+                                        this.playSong(song);
+                                    });
+                                    batchFragment.appendChild(songElement);
+                                }
+                            });
+                            
+                            container.appendChild(batchFragment);
+                            
+                            // If there are still more songs, add a new sentinel
+                            if (remainingSongs.length > 0) {
+                                container.appendChild(sentinel);
+                                isLoadingMore = false;
+                            } else {
+                                // Clean up the observer
+                                loadMoreObserver.disconnect();
+                            }
+                            
+                            // Setup lazy loading for the new images
+                            this._setupLazyLoading();
+                        }, 100);
+                    }
+                });
+            }, observerOptions);
+            
+            // Start observing the sentinel
+            loadMoreObserver.observe(sentinel);
+        }
+        
+        // Set up lazy loading for images
         this._setupLazyLoading();
     }
 
     _setupLazyLoading() {
-        // Use IntersectionObserver for lazy loading
+        // Use Intersection Observer for better lazy loading performance
         if ('IntersectionObserver' in window) {
-            const observer = new IntersectionObserver((entries, observer) => {
-                entries.forEach(entry => {
-                    if (entry.isIntersecting) {
-                        const img = entry.target;
-                        const dataSrc = img.getAttribute('data-src');
+            // Only create one observer if it doesn't exist yet
+            if (!this.lazyImageObserver) {
+                this.lazyImageObserver = new IntersectionObserver((entries, observer) => {
+                    // Process a batch of images using setTimeout to avoid blocking the UI
+                    const processEntries = (index) => {
+                        // Process 5 entries at a time
+                        const batchSize = 5;
+                        const end = Math.min(index + batchSize, entries.length);
                         
-                        if (dataSrc) {
-                            img.src = dataSrc;
-                            img.removeAttribute('data-src');
+                        for (let i = index; i < end; i++) {
+                            const entry = entries[i];
+                            if (entry.isIntersecting) {
+                                const lazyImage = entry.target;
+                                const src = lazyImage.getAttribute('data-src');
+                                if (src) {
+                                    lazyImage.src = src;
+                                    lazyImage.addEventListener('load', () => {
+                                        lazyImage.classList.add('loaded');
+                                    });
+                                    lazyImage.removeAttribute('data-src');
+                                    observer.unobserve(lazyImage);
+                                }
+                            }
                         }
                         
-                        observer.unobserve(img);
-                    }
+                        // If there are more entries to process, schedule them
+                        if (end < entries.length) {
+                            setTimeout(() => processEntries(end), 50);
+                        }
+                    };
+                    
+                    // Start processing the batch
+                    processEntries(0);
+                }, {
+                    rootMargin: '200px', // Load images 200px before they become visible
+                    threshold: 0.1
                 });
-            });
-            
-            // Observe all song thumbnails
-            document.querySelectorAll('img[data-src]').forEach(img => {
-                observer.observe(img);
+            }
+
+            // Observe new lazy images
+            const newLazyImages = document.querySelectorAll('img.lazy-thumbnail:not([data-observed])');
+            newLazyImages.forEach(img => {
+                img.setAttribute('data-observed', 'true');
+                this.lazyImageObserver.observe(img);
             });
         } else {
-            // Fallback for browsers that don't support IntersectionObserver
-            document.querySelectorAll('img[data-src]').forEach(img => {
-                img.src = img.getAttribute('data-src');
-            });
+            // Fallback for browsers without Intersection Observer support
+            this._setupLegacyLazyLoading();
         }
+    }
+
+    // Legacy lazy loading for browsers without Intersection Observer
+    _setupLegacyLazyLoading() {
+        const lazyImages = [].slice.call(document.querySelectorAll('img.lazy-thumbnail'));
+        
+        if (lazyImages.length === 0) {
+            return;
+        }
+
+        const lazyImageLoad = () => {
+            const scrollTop = window.pageYOffset;
+            lazyImages.forEach(img => {
+                if (img.offsetTop < (window.innerHeight + scrollTop)) {
+                    const src = img.getAttribute('data-src');
+                    if (src) {
+                        img.src = src;
+                        img.addEventListener('load', () => {
+                            img.classList.add('loaded');
+                        });
+                        img.removeAttribute('data-src');
+                    }
+                }
+            });
+            
+            if (lazyImages.length === 0) { 
+                document.removeEventListener('scroll', lazyImageLoad);
+                window.removeEventListener('resize', lazyImageLoad);
+                window.removeEventListener('orientationChange', lazyImageLoad);
+            }
+        };
+
+        document.addEventListener('scroll', lazyImageLoad);
+        window.addEventListener('resize', lazyImageLoad);
+        window.addEventListener('orientationChange', lazyImageLoad);
+        
+        // Initial load
+        setTimeout(lazyImageLoad, 20);
     }
 
     /**
@@ -876,90 +965,167 @@ class MusicPlayer {
      * @param {Object} song - The song to play
      */
     async playSong(song) {
-        if (!song) {
-            console.error('Cannot play song: no song provided');
+        // Prevent multiple songs from playing simultaneously
+        if (this.isLoading) {
+            console.log('Already loading a song, ignoring request');
             return;
         }
-        
-        // Store the song that was requested to play
-        const songToPlay = song;
-        console.log('Playing song:', songToPlay);
-        
+
         try {
-            // Update UI with song info first for immediate feedback
-            this.updateSongInfo(songToPlay);
+            this.isLoading = true;
             
-            // Set the audio source and play
-            await this.audioPlayer.playSong(songToPlay);
-            
-            // Save as current song
-            this.currentSong = songToPlay;
-            
-            // Save to recently played
-            this._addToRecentlyPlayed(songToPlay);
-            
-            // CRITICAL: Set like button state immediately based on liked songs list
-            if (songToPlay.id && this.playlistManager) {
-                console.log('Setting initial like state for song:', songToPlay.id);
-                // First try by ID
-                const isLiked = this.playlistManager.likedSongs.some(
-                    likedSong => likedSong && likedSong.id === songToPlay.id
-                );
-                
-                // Update UI
-                if (this.uiManager) {
-                    this.uiManager.updateLikeButton(isLiked);
-                }
-                
-                // Also use the more robust method as a backup
-                this.playlistManager.setInitialLikeState(
-                    songToPlay.id, 
-                    songToPlay.title, 
-                    songToPlay.artist
-                );
+            // Cancel any previous pending requests
+            if (this.currentAbortController) {
+                this.currentAbortController.abort();
             }
+            
+            // Create new abort controller for this request
+            this.currentAbortController = new AbortController();
+            
+            // Stop current audio first
+            this.audio.pause();
+            this.audio.currentTime = 0;
+            
+            console.log(`Playing song: ${song.title} by ${song.artist} (ID: ${song.id})`);
+            
+            // Update UI first for better responsiveness
+            this.updateSongInfo(song);
+            this.uiManager.updatePlayPauseButton(false);
+            
+            // Set src and load the new audio
+            const songUrl = `/api/stream/${song.id}`;
+            this.audio.src = songUrl;
+            
+            // Wait for audio to be loaded before playing
+            const loadPromise = new Promise((resolve, reject) => {
+                this.audio.oncanplaythrough = resolve;
+                this.audio.onerror = () => reject(new Error(`Failed to load audio: ${song.id}`));
+                
+                // Set a timeout to prevent indefinite waiting
+                setTimeout(() => reject(new Error('Audio load timeout')), 10000);
+            });
+            
+            await loadPromise;
+            
+            // Play the song
+            await this.audio.play();
+            this.uiManager.updatePlayPauseButton(true);
+            
+            // Add to recently played
+            this._addToRecentlyPlayed(song);
+            
+            // Update song's like state
+            this._updateSongLikeState(song.id);
         } catch (error) {
             console.error('Error playing song:', error);
-            this.uiManager.showNotification('Failed to play song', 'error');
+            this.uiManager.showNotification(`Failed to play: ${error.message}`, 'error');
+        } finally {
+            this.isLoading = false;
         }
     }
 
     handlePlayPause() {
-        if (!this.currentSong) return;
+        if (this.isLoading) {
+            console.log('Song is still loading, ignoring play/pause request');
+            return;
+        }
         
-        if (this.audioPlayer.paused) {
-            this.audioPlayer.resume()
+        if (this.audio.paused) {
+            this.audio.play()
                 .then(() => this.uiManager.updatePlayPauseButton(true))
-                .catch(error => {
-                    console.error('Error playing song:', error);
-                    this.uiManager.updatePlayPauseButton(false);
-                });
+                .catch(err => console.error('Error playing audio:', err));
         } else {
-            this.audioPlayer.pause();
+            this.audio.pause();
             this.uiManager.updatePlayPauseButton(false);
         }
     }
 
     playPrevious() {
-        if (this.currentSongIndex > 0) {
-            const prevSong = this.songListManager.songs[this.currentSongIndex - 1];
-            if (prevSong && prevSong.id) {
-                // Update like status before playing the song
-                this.updateLikeStatus(prevSong.id);
-            }
-            this.playSong(prevSong);
+        if (this.isLoading) {
+            console.log('Song is still loading, ignoring previous request');
+            return;
+        }
+        
+        if (!this.currentSong) return;
+        
+        // If we're more than 3 seconds into the song, restart the current song
+        if (this.audio.currentTime > 3) {
+            this.audio.currentTime = 0;
+            return;
+        }
+        
+        const currentIndex = this.recentlyPlayed.findIndex(s => s.id === this.currentSong.id);
+        if (currentIndex > 0) {
+            // There's a previous song in history
+            const previousSong = this.recentlyPlayed[currentIndex - 1];
+            this.playSong(previousSong);
+        } else {
+            // Restart current song if no previous song
+            this.audio.currentTime = 0;
         }
     }
 
     playNext() {
-        if (this.currentSongIndex < this.songListManager.songs.length - 1) {
-            const nextSong = this.songListManager.songs[this.currentSongIndex + 1];
-            if (nextSong && nextSong.id) {
-                // Update like status before playing the song
-                this.updateLikeStatus(nextSong.id);
-            }
-            this.playSong(nextSong);
+        if (this.isLoading) {
+            console.log('Song is still loading, ignoring next request');
+            return;
         }
+        
+        if (!this.currentSong) {
+            // If no song is playing, play a random one
+            if (this.songListManager.songs.length > 0) {
+                this.playRandomSong();
+            }
+            return;
+        }
+        
+        // Check if repeat is enabled
+        if (this.repeatEnabled) {
+            // Restart the current song
+            this.audio.currentTime = 0;
+            this.audio.play()
+                .catch(err => console.error('Error replaying song:', err));
+            return;
+        }
+        
+        // If shuffle is enabled, play a random song
+        if (this.shuffleEnabled) {
+            this.playRandomSong();
+            return;
+        }
+        
+        // Otherwise try to play the next song in the current list
+        const currentList = document.querySelector('.songs-container.active') || 
+                           document.querySelector('.songs-container');
+                           
+        if (currentList) {
+            const songCards = currentList.querySelectorAll('.song-card');
+            if (songCards.length > 0) {
+                // Find the current song in the list
+                let currentIndex = -1;
+                for (let i = 0; i < songCards.length; i++) {
+                    if (songCards[i].dataset.songId === this.currentSong.id) {
+                        currentIndex = i;
+                        break;
+                    }
+                }
+                
+                // If found and not the last song, play the next one
+                if (currentIndex >= 0 && currentIndex < songCards.length - 1) {
+                    const nextCard = songCards[currentIndex + 1];
+                    const songId = nextCard.dataset.songId;
+                    // Find this song in our song list
+                    const nextSong = this.songListManager.songs.find(s => s.id === songId);
+                    if (nextSong) {
+                        this.playSong(nextSong);
+                        return;
+                    }
+                }
+            }
+        }
+        
+        // As a fallback, play a random song
+        this.playRandomSong();
     }
 
     /**
@@ -1139,25 +1305,63 @@ class MusicPlayer {
 
     // Play a random song (for shuffle mode)
     playRandomSong() {
-        const availableSongs = this.songListManager.songs;
-        if (availableSongs.length === 0) return;
-        
-        // Don't play the current song again
-        const filteredSongs = availableSongs.filter(song => 
-            !this.currentSong || song.id !== this.currentSong.id
-        );
-        
-        if (filteredSongs.length === 0) {
-            // If there's only one song, play it again
-            this.playSong(this.currentSong);
+        if (this.isLoading) {
+            console.log('Song is still loading, ignoring random song request');
             return;
         }
         
-        // Pick a random song
-        const randomIndex = Math.floor(Math.random() * filteredSongs.length);
-        const randomSong = filteredSongs[randomIndex];
+        if (!this.songListManager || !this.songListManager.songs || this.songListManager.songs.length === 0) {
+            console.warn('No songs available to play randomly');
+            return;
+        }
         
-        this.playSong(randomSong);
+        // Keep track of songs that have been played recently to avoid repeats
+        if (!this.recentRandoms) {
+            this.recentRandoms = new Set();
+        }
+        
+        const availableSongs = this.songListManager.songs.filter(song => 
+            // Don't play the current song again or recently played songs
+            song.id !== (this.currentSong ? this.currentSong.id : null) && 
+            !this.recentRandoms.has(song.id)
+        );
+        
+        // If we've played most of the songs, reset the tracking
+        if (availableSongs.length < this.songListManager.songs.length * 0.2) {
+            console.log('Resetting recent random songs tracking');
+            this.recentRandoms.clear();
+            // Still avoid the current song
+            const currentId = this.currentSong ? this.currentSong.id : null;
+            if (currentId) {
+                this.recentRandoms.add(currentId);
+            }
+        }
+        
+        let randomSong;
+        if (availableSongs.length > 0) {
+            // Pick from songs we haven't played recently
+            const randomIndex = Math.floor(Math.random() * availableSongs.length);
+            randomSong = availableSongs[randomIndex];
+        } else {
+            // Fallback to completely random selection
+            const randomIndex = Math.floor(Math.random() * this.songListManager.songs.length);
+            randomSong = this.songListManager.songs[randomIndex];
+        }
+        
+        if (randomSong) {
+            // Track this song as recently played
+            if (randomSong.id) {
+                this.recentRandoms.add(randomSong.id);
+                // Limit the size of the set to avoid memory issues
+                if (this.recentRandoms.size > 20) {
+                    // Remove the oldest item (first in the set)
+                    this.recentRandoms.delete([...this.recentRandoms][0]);
+                }
+            }
+            
+            console.log('Playing random song:', randomSong.title);
+            this.playSong(randomSong);
+        }
     }
 
     /**
@@ -1188,6 +1392,13 @@ class MusicPlayer {
                 window.refreshLikedSongsOnReady = false;
             }, 1000);
         }
+
+        // Initialize audio state
+        this.audio.volume = 0.7; // Default volume
+        this.uiManager.updateVolume(0.7);
+        
+        // Pre-buffer the audio to help avoid loading delays
+        this.audio.preload = 'auto';
     }
 
     /**
@@ -1258,20 +1469,22 @@ async function initApp() {
         console.log('Initializing application...');
         
         // Create and initialize the music player as early as possible
-        window.musicPlayer = new MusicPlayer();
-        
-        // Initialize the application after DOM content is loaded
-        if (document.readyState === 'loading') {
-            document.addEventListener('DOMContentLoaded', () => {
-                console.log('DOM content loaded, initializing app components');
-                window.musicPlayer.initializeApplication().catch(error => {
-                    console.error('Error initializing music player:', error);
+        if (!window.musicPlayer) {
+            window.musicPlayer = new MusicPlayer();
+            
+            // Initialize the application after DOM content is loaded
+            if (document.readyState === 'loading') {
+                document.addEventListener('DOMContentLoaded', () => {
+                    console.log('DOM content loaded, initializing app components');
+                    window.musicPlayer.initializeApplication().catch(error => {
+                        console.error('Error initializing music player:', error);
+                    });
                 });
-            });
-        } else {
-            // DOM already loaded, initialize immediately
-            console.log('DOM already loaded, initializing app components immediately');
-            await window.musicPlayer.initializeApplication();
+            } else {
+                // DOM already loaded, initialize immediately
+                console.log('DOM already loaded, initializing app components immediately');
+                await window.musicPlayer.initializeApplication();
+            }
         }
         
     } catch (error) {
@@ -1280,7 +1493,12 @@ async function initApp() {
     }
 }
 
-// Start initialization
+// Initialize thumbnail cache for better performance
+if (!window.thumbnailCache) {
+    window.thumbnailCache = {};
+}
+
+// Start initialization only once
 initApp();
 
 // Make authFetch available globally for service worker and other components

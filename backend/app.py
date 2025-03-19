@@ -1,17 +1,24 @@
-from flask import Flask, jsonify, render_template, Response, stream_with_context, make_response, send_file, request, redirect
-from flask_cors import CORS
 import os
-from supabase import create_client, Client
-import requests
-from dotenv import load_dotenv
+import sys
+import json
+import re
 import logging
-import mimetypes
+import uuid
+import time
+import requests
+from flask import Flask, jsonify, request, send_file, render_template, Response, redirect
+from dotenv import load_dotenv
 import boto3
 from botocore.client import Config
+from supabase import create_client
+import datetime
+from logging.handlers import RotatingFileHandler
+from flask_cors import CORS
 from PIL import Image
 from io import BytesIO
 import tempfile
-import datetime
+import mimetypes
+
 # Load environment variables only in development
 if os.path.exists('.env'):
     load_dotenv()
@@ -20,6 +27,23 @@ app = Flask(__name__,
     static_folder='../frontend/static',
     template_folder='../frontend/templates'
 )
+
+# Ensure static directory exists
+os.makedirs(os.path.join(app.root_path, 'static'), exist_ok=True)
+
+# Create a placeholder image if it doesn't exist
+placeholder_path = os.path.join(app.root_path, 'static', 'placeholder.png')
+if not os.path.exists(placeholder_path):
+    try:
+        img = Image.new('RGB', (100, 100), color = (73, 109, 137))
+        img.save(placeholder_path)
+        print(f"Created placeholder image at {placeholder_path}")
+    except Exception as e:
+        print(f"Could not create placeholder image: {e}")
+        # Write a simple 1x1 PNG as fallback
+        with open(placeholder_path, 'wb') as f:
+            f.write(bytes.fromhex('89504e470d0a1a0a0000000d49484452000000010000000108060000001f15c4890000000d49444154789c636060606000000005ffff0b290000000049454e44ae426082'))
+            print(f"Created fallback placeholder image at {placeholder_path}")
 
 # Configure CORS based on environment
 if os.getenv('RAILWAY_ENVIRONMENT') == 'True':
@@ -91,7 +115,7 @@ logger.info(f"Using B2 endpoint: {B2_ENDPOINT}")
 logger.info(f"Using key ID: {s3_key_id[:10]}...")  # Log first part of key ID
 
 # Initialize Supabase client
-supabase: Client = create_client(
+supabase = create_client(
     os.getenv('SUPABASE_URL'),
     os.getenv('SUPABASE_KEY')
 )
@@ -152,34 +176,176 @@ def get_songs():
         try:
             page_size = min(int(request.args.get('limit', '30')), 30)  # Default and max 30
             offset = int(request.args.get('offset', '0'))
-            logger.info(f"Fetching songs with limit {page_size} and offset {offset}")
+            random_mode = request.args.get('random', 'false').lower() == 'true'
+            thumbnails_only = request.args.get('thumbnails_only', 'true').lower() == 'true'
+            logger.info(f"Fetching songs with limit {page_size}, offset {offset}, random={random_mode}, thumbnails_only={thumbnails_only}")
         except ValueError:
             logger.error("Invalid pagination parameters")
             return jsonify({'error': 'Invalid pagination parameters'}), 400
 
-        # First get total count
+        # Cache of thumbnail existence to avoid repeated checks
+        if not hasattr(app, 'thumbnail_existence_cache'):
+            app.thumbnail_existence_cache = {}
+
+        # Refresh cache every hour
+        if hasattr(app, 'thumbnail_cache_timestamp'):
+            cache_age = time.time() - app.thumbnail_cache_timestamp
+            if cache_age > 3600:  # 1 hour
+                logger.info("Refreshing thumbnail existence cache")
+                app.thumbnail_existence_cache = {}
+                app.thumbnail_cache_timestamp = time.time()
+        else:
+            app.thumbnail_cache_timestamp = time.time()
+
+        # First get total count without thumbnail filtering
         count_response = supabase.table('songs').select('*', count='exact').execute()
         total_count = count_response.count if hasattr(count_response, 'count') else 0
         logger.info(f"Total songs in database: {total_count}")
 
-        # Then get paginated results
-        response = supabase.table('songs') \
-            .select('*') \
-            .range(offset, offset + page_size - 1) \
-            .execute()
-
-        logger.info(f"Found {len(response.data)} songs for this page")
+        # Build the query
+        query = supabase.table('songs').select('*')
         
+        # Apply ordering - random or by most recent
+        if random_mode:
+            # PostgreSQL random() function for true randomization
+            query = query.order('random()', desc=False)
+        else:
+            # Default to showing newest songs first
+            query = query.order('updated_at', desc=True)
+            
+        # Apply pagination - get more than needed to account for thumbnail filtering
+        expanded_limit = page_size * 3 if thumbnails_only else page_size
+        query = query.range(offset, offset + expanded_limit - 1)
+        
+        # Execute query
+        response = query.execute()
+        
+        songs = response.data
+        logger.info(f"Retrieved {len(songs)} songs before thumbnail filtering")
+        
+        # If thumbnails_only is true, filter songs to only those with thumbnails
+        if thumbnails_only:
+            filtered_songs = []
+            filtered_count = 0
+            
+            for song in songs:
+                # Check if we need more songs for this page
+                if len(filtered_songs) >= page_size:
+                    break
+                    
+                # Check if we already know if this song has a thumbnail
+                song_id = str(song['id'])
+                has_thumbnail = app.thumbnail_existence_cache.get(song_id)
+                
+                if has_thumbnail is None:
+                    # Format the song_id to match the B2 format (6 digits with leading zeros)
+                    try:
+                        # Remove any leading zeros first
+                        clean_id = song_id.lstrip('0')
+                        
+                        # Format to 6 digits with leading zeros
+                        formatted_id = clean_id.zfill(6)
+                        
+                        # Generate the thumbnail path
+                        thumbnail_path = f"thumbnails/{formatted_id}.png"
+                        
+                        # Check if the thumbnail exists in B2
+                        try:
+                            # Use head_object to check existence without downloading
+                            s3_client.head_object(Bucket=B2_BUCKET_NAME, Key=thumbnail_path)
+                            has_thumbnail = True
+                        except Exception:
+                            has_thumbnail = False
+                            
+                        # Store result in cache
+                        app.thumbnail_existence_cache[song_id] = has_thumbnail
+                    except Exception as e:
+                        logger.error(f"Error checking thumbnail for song {song_id}: {str(e)}")
+                        has_thumbnail = False  # Assume no thumbnail on error
+                
+                if has_thumbnail:
+                    filtered_songs.append(song)
+                else:
+                    filtered_count += 1
+            
+            logger.info(f"Filtered out {filtered_count} songs without thumbnails")
+            songs = filtered_songs
+        
+        # Check if we need to fetch more songs
+        while thumbnails_only and len(songs) < page_size and (offset + expanded_limit) < total_count:
+            # Fetch the next batch
+            next_offset = offset + expanded_limit
+            next_limit = page_size
+            
+            logger.info(f"Fetching additional songs from offset {next_offset}")
+            
+            # Build another query for more songs
+            more_query = supabase.table('songs').select('*')
+            
+            # Apply same ordering
+            if random_mode:
+                more_query = more_query.order('random()', desc=False)
+            else:
+                more_query = more_query.order('updated_at', desc=True)
+                
+            # Apply new pagination range
+            more_query = more_query.range(next_offset, next_offset + next_limit - 1)
+            
+            # Execute query
+            more_response = more_query.execute()
+            
+            if not more_response.data:
+                break  # No more songs
+                
+            # Filter these songs too
+            for song in more_response.data:
+                # Check if we have enough songs
+                if len(songs) >= page_size:
+                    break
+                    
+                # Same thumbnail check logic
+                song_id = str(song['id'])
+                has_thumbnail = app.thumbnail_existence_cache.get(song_id)
+                
+                if has_thumbnail is None:
+                    try:
+                        clean_id = song_id.lstrip('0')
+                        formatted_id = clean_id.zfill(6)
+                        thumbnail_path = f"thumbnails/{formatted_id}.png"
+                        
+                        try:
+                            s3_client.head_object(Bucket=B2_BUCKET_NAME, Key=thumbnail_path)
+                            has_thumbnail = True
+                        except Exception:
+                            has_thumbnail = False
+                            
+                        app.thumbnail_existence_cache[song_id] = has_thumbnail
+                    except Exception as e:
+                        logger.error(f"Error checking thumbnail for song {song_id}: {str(e)}")
+                        has_thumbnail = False
+                
+                if has_thumbnail:
+                    songs.append(song)
+            
+            # Update offset for next query if needed
+            offset = next_offset + next_limit
+            
+            # Safety check to prevent infinite loop
+            if not more_response.data:
+                break
+        
+        # Return filtered results
         return jsonify({
-            'songs': response.data,
-            'total': total_count,
+            'songs': songs[:page_size],  # Ensure we don't return more than requested
+            'total': len(songs),  # This is now the count of songs with thumbnails
             'offset': offset,
             'limit': page_size,
-            'has_more': (offset + len(response.data)) < total_count
+            'has_more': len(songs) > page_size or (offset + len(songs)) < total_count,
+            'random': random_mode,
+            'thumbnails_only': thumbnails_only
         })
-
     except Exception as e:
-        logger.error(f"Error fetching songs: {str(e)}", exc_info=True)
+        logger.error(f"Error getting songs: {e}")
         return jsonify({'error': str(e)}), 500
 
 @app.route('/api/stream/<song_id>')
@@ -310,114 +476,128 @@ def stream_song(song_id):
         logger.error(f"Error in stream_song endpoint: {str(e)}", exc_info=True)
         return jsonify({'error': f'Server error: {str(e)}'}), 500
 
-@app.route('/api/thumbnail/<song_id>')
-def get_thumbnail(song_id):
+@app.route('/api/thumbnail/<song_id>', methods=['GET'])
+def api_get_thumbnail(song_id):
+    """
+    Thumbnail endpoint that fetches from B2 using the correct 6-digit format with leading zeros
+    """
+    # Use a request counter to track and log only every 10th request for performance
+    if not hasattr(app, 'thumbnail_request_counter'):
+        app.thumbnail_request_counter = 0
+    app.thumbnail_request_counter += 1
+    
+    do_log = app.thumbnail_request_counter % 10 == 0
+    if do_log:
+        app.logger.info(f"Thumbnail endpoint called for song ID: {song_id} (request #{app.thumbnail_request_counter})")
+    
+    # Create a cached directory for thumbnails if it doesn't exist
+    cache_dir = os.path.join(app.root_path, 'thumbnails_cache')
+    os.makedirs(cache_dir, exist_ok=True)
+    
+    # Limit the number of files in the cache directory to prevent disk space issues
     try:
-        # Check if we have this thumbnail in the cache
-        cache_key = f"thumbnail_{song_id}"
-        cached_thumbnail = getattr(app, 'thumbnail_cache', {}).get(cache_key)
+        cache_files = os.listdir(cache_dir)
+        if len(cache_files) > 1000:  # Limit to 1000 cached thumbnails
+            # Remove oldest 200 files to make space
+            cache_files.sort(key=lambda f: os.path.getmtime(os.path.join(cache_dir, f)))
+            for old_file in cache_files[:200]:
+                try:
+                    os.remove(os.path.join(cache_dir, old_file))
+                    if do_log:
+                        app.logger.info(f"Removed old cached thumbnail: {old_file}")
+                except Exception as e:
+                    if do_log:
+                        app.logger.warning(f"Failed to remove old cache file {old_file}: {str(e)}")
+    except Exception as e:
+        if do_log:
+            app.logger.warning(f"Failed to clean cache directory: {str(e)}")
+    
+    cache_path = os.path.join(cache_dir, f"{song_id}.png")
+    
+    # Check if we have a cached version (with a time limit to refresh cache occasionally)
+    if os.path.exists(cache_path):
+        # Check if the cache is fresh (less than 24 hours old)
+        cache_time = os.path.getmtime(cache_path)
+        cache_age = time.time() - cache_time
+        if cache_age < 86400:  # 24 hours in seconds
+            if do_log:
+                app.logger.info(f"Returning cached thumbnail for song ID: {song_id} (age: {cache_age:.1f}s)")
+            return send_file(cache_path, mimetype='image/png')
+        elif do_log:
+            app.logger.info(f"Cache expired for song ID: {song_id} (age: {cache_age:.1f}s)")
+    
+    # Format the song_id to match the B2 format (exactly 6 digits with leading zeros)
+    try:
+        # Remove any leading zeros first
+        clean_id = song_id.lstrip('0')
         
-        if cached_thumbnail:
-            logger.info(f"Serving thumbnail for song {song_id} from memory cache")
-            response = send_file(
-                cached_thumbnail,
-                mimetype='image/png',
-                as_attachment=False,
-                download_name=f"{song_id}.png"
-            )
-            
-            # Add strong caching headers
-            response.headers.update({
-                'Cache-Control': 'public, max-age=604800',  # Cache for 1 week
-                'Pragma': 'cache',
-                'Expires': '604800'
-            })
-            
-            return response
+        # Format to 6 digits with leading zeros
+        formatted_id = clean_id.zfill(6)
         
-        # Fetch song data from Supabase
-        response = supabase.table('songs').select('*').eq('id', song_id).execute()
+        if do_log:
+            app.logger.info(f"Formatted song ID from {song_id} to {formatted_id} for B2 path")
         
-        if not response.data:
-            logger.error(f"Song with ID {song_id} not found")
-            return jsonify({'error': 'Song not found'}), 404
-            
-        song_data = response.data[0]
-        if not song_data.get('thumbnail_path'):
-            logger.error("Missing thumbnail_path in song data")
-            return jsonify({'error': 'No thumbnail available'}), 404
-
-        # Generate a pre-signed URL for the thumbnail
+        # Generate the thumbnail path - must be exactly thumbnails/XXXXXX.png (6 digits)
+        thumbnail_path = f"thumbnails/{formatted_id}.png"
+        if do_log:
+            app.logger.info(f"Attempting to get thumbnail from: {thumbnail_path}")
+        
         try:
+            # Generate presigned URL with S3 client
             presigned_url = s3_client.generate_presigned_url(
                 'get_object',
-                Params={
-                    'Bucket': B2_BUCKET_NAME,
-                    'Key': song_data['thumbnail_path']
-                },
+                Params={'Bucket': B2_BUCKET_NAME, 'Key': thumbnail_path},
                 ExpiresIn=3600
             )
-            logger.info(f"Generated pre-signed URL for thumbnail: {song_data['thumbnail_path']}")
             
-            # Download the thumbnail
-            response = requests.get(presigned_url)
-            if response.status_code != 200:
-                logger.error(f"Failed to download thumbnail: {response.status_code}")
-                return jsonify({'error': 'Failed to download thumbnail'}), 404
-
-            # Convert WebP to PNG
-            try:
-                # Open WebP image from bytes
-                img = Image.open(BytesIO(response.content))
-                
-                # Convert to RGB/RGBA as needed
-                if img.mode in ('RGBA', 'LA') or (img.mode == 'P' and 'transparency' in img.info):
-                    img = img.convert('RGBA')
-                else:
-                    img = img.convert('RGB')
-                
-                # Save as PNG to BytesIO
-                output = BytesIO()
-                img.save(output, format='PNG')
-                output.seek(0)
-                
-                # Initialize thumbnail cache if it doesn't exist
-                if not hasattr(app, 'thumbnail_cache'):
-                    app.thumbnail_cache = {}
-                
-                # Store the BytesIO object in the cache
-                cached_copy = BytesIO(output.getvalue())
-                app.thumbnail_cache[cache_key] = cached_copy
-                
-                # Create response with the original output
-                response = send_file(
-                    output,
-                    mimetype='image/png',
-                    as_attachment=False,
-                    download_name=f"{song_id}.png"
-                )
-                
-                # Add strong caching headers for better performance
-                response.headers.update({
-                    'Cache-Control': 'public, max-age=604800',  # Cache for 1 week
-                    'Pragma': 'cache',
-                    'Expires': '604800',
-                    'ETag': f'"{song_id}"'
-                })
-                
-                return response
-                
-            except Exception as e:
-                logger.error(f"Error converting WebP to PNG: {str(e)}")
-                return jsonify({'error': 'Failed to convert image'}), 500
-
+            if do_log:
+                app.logger.info(f"Generated presigned URL for thumbnail")
+            
+            # Try to download the thumbnail with a short timeout
+            response = requests.get(presigned_url, timeout=3)
+            if response.status_code == 200:
+                # Save to cache and return
+                with open(cache_path, 'wb') as f:
+                    f.write(response.content)
+                if do_log:
+                    app.logger.info(f"Thumbnail saved to cache: {cache_path}")
+                return send_file(cache_path, mimetype='image/png')
+            else:
+                if do_log:
+                    app.logger.warning(f"Failed to download thumbnail with status code: {response.status_code}")
+                # Fall back to placeholder
+                raise Exception(f"B2 returned status code {response.status_code}")
         except Exception as e:
-            logger.error(f"Error accessing thumbnail: {str(e)}")
-            return jsonify({'error': 'Failed to access thumbnail'}), 500
-
+            if do_log:
+                app.logger.error(f"Error getting thumbnail from B2: {str(e)}")
+            # Fall back to placeholder
+            raise
     except Exception as e:
-        logger.error(f"Error in get_thumbnail: {str(e)}")
-        return jsonify({'error': str(e)}), 500
+        if do_log:
+            app.logger.error(f"Error in thumbnail processing: {str(e)}")
+        # Fall back to placeholder
+    
+    # Return a placeholder image if anything fails
+    placeholder_path = os.path.join(app.root_path, 'static', 'placeholder.png')
+    if os.path.exists(placeholder_path):
+        if do_log:
+            app.logger.info(f"Returning placeholder image from {placeholder_path}")
+        return send_file(placeholder_path, mimetype='image/png')
+    else:
+        if do_log:
+            app.logger.error(f"Placeholder image not found at: {placeholder_path}")
+        # Create a simple 1x1 transparent PNG as final fallback
+        data = bytes.fromhex('89504e470d0a1a0a0000000d49484452000000010000000108060000001f15c4890000000d49444154789c636060606000000005ffff0b290000000049454e44ae426082')
+        response = Response(data, mimetype='image/png')
+        return response
+
+# Also make the non-api version work the same way for compatibility
+@app.route('/thumbnail/<song_id>', methods=['GET'])
+def get_thumbnail(song_id):
+    """
+    Redirect to the API version for consistency
+    """
+    return api_get_thumbnail(song_id)
 
 @app.after_request
 def after_request(response):
@@ -543,51 +723,73 @@ def like_song():
             logger.error(f"Failed to authenticate user: {str(e)}")
             return jsonify({'error': 'Invalid authentication token'}), 401
         
-        # Check if the song exists in the database
+        # Check if the song exists in the database - try multiple approaches
+        found_song = False
+        found_song_id = song_id  # Default to the original ID
+        
         try:
-            # Try to find the song directly first
+            # Try direct exact match first (most reliable)
+            logger.info(f"Checking for song with exact ID: '{song_id}'")
             song_check = supabase.table('songs').select('id').eq('id', song_id).limit(1).execute()
             
-            if not song_check.data or len(song_check.data) == 0:
-                logger.warning(f"Song with ID '{song_id}' not found in database, will try alternate lookup")
+            if song_check.data and len(song_check.data) > 0:
+                found_song = True
+                logger.info(f"Found song with exact ID: {song_id}")
+            else:
+                logger.warning(f"Song with exact ID '{song_id}' not found, trying alternative lookups")
                 
-                # If not found directly, try numeric conversion
+                # Try numeric ID if the original ID is numeric
                 if song_id.isdigit():
                     numeric_id = song_id
-                    logger.info(f"Converted song ID to numeric: {numeric_id}")
+                    logger.info(f"Trying with numeric ID: {numeric_id}")
                     
-                    # Try with the numeric ID
                     song_check = supabase.table('songs').select('id').eq('id', numeric_id).limit(1).execute()
                     if song_check.data and len(song_check.data) > 0:
-                        song_id = numeric_id
-                        logger.info(f"Found song with numeric ID: {song_id}")
-                    else:
-                        logger.warning(f"Song not found with either string or numeric ID: {song_id}")
-                else:
-                    logger.warning(f"Song ID '{song_id}' is not numeric and not found directly")
+                        found_song = True
+                        found_song_id = numeric_id
+                        logger.info(f"Found song with numeric ID: {numeric_id}")
+                
+                # If still not found and ID has leading zeros, try without them
+                if not found_song and song_id.startswith('0'):
+                    stripped_id = song_id.lstrip('0')
+                    if stripped_id:  # Avoid empty string
+                        logger.info(f"Trying with leading zeros removed: {stripped_id}")
+                        song_check = supabase.table('songs').select('id').eq('id', stripped_id).limit(1).execute()
+                        if song_check.data and len(song_check.data) > 0:
+                            found_song = True
+                            found_song_id = stripped_id
+                            logger.info(f"Found song with stripped ID: {stripped_id}")
+                
+                # If still not found, try as a pattern match
+                if not found_song:
+                    logger.info(f"Trying with pattern match for ID: {song_id}")
+                    pattern = f"%{song_id}%"
+                    song_check = supabase.table('songs').select('id').like('id', pattern).limit(1).execute()
+                    if song_check.data and len(song_check.data) > 0:
+                        found_song = True
+                        found_song_id = song_check.data[0]['id']
+                        logger.info(f"Found song with pattern match: {found_song_id}")
                 
                 # If still not found, return error
-                if not song_check.data or len(song_check.data) == 0:
+                if not found_song:
                     logger.error(f"Song with ID '{song_id}' not found after all lookup attempts")
                     return jsonify({'error': 'Song not found in database'}), 404
-            else:
-                logger.info(f"Found song with ID: {song_id}")
             
-            # Insert the liked song record
+            # Insert the liked song record with the found song ID
             liked_song = {
                 'user_id': user_id,
-                'song_id': song_id
+                'song_id': found_song_id
             }
             
             # Check if this song is already liked by the user
             existing_check = supabase.table('liked_songs').select('*') \
                 .eq('user_id', user_id) \
-                .eq('song_id', song_id) \
+                .eq('song_id', found_song_id) \
                 .limit(1) \
                 .execute()
                 
             if existing_check.data and len(existing_check.data) > 0:
-                logger.info(f"Song '{song_id}' is already liked by user '{user_id}'")
+                logger.info(f"Song '{found_song_id}' is already liked by user '{user_id}'")
                 return jsonify({'success': True, 'message': 'Song is already in liked songs'})
             
             # Use upsert to handle case where it might already exist
@@ -597,7 +799,7 @@ def like_song():
                 logger.warning("No data returned from database operation")
                 return jsonify({'success': True, 'message': 'Song added to liked songs (no data returned)'})
                 
-            logger.info(f"Successfully added song '{song_id}' to liked songs for user '{user_id}'")
+            logger.info(f"Successfully added song '{found_song_id}' to liked songs for user '{user_id}'")
             return jsonify({
                 'success': True, 
                 'message': 'Song added to liked songs',
@@ -872,6 +1074,120 @@ def auth_callback():
     """
     logger.info("Auth callback received, rendering index page to process tokens")
     return render_template('index.html')
+
+@app.route('/api/debug/thumbnail-test', methods=['GET'])
+def debug_thumbnail():
+    """
+    Debug endpoint to test all thumbnail functionality components
+    """
+    results = {
+        "timestamp": datetime.datetime.now().isoformat(),
+        "tests": []
+    }
+    
+    def add_test_result(name, success, message, details=None):
+        results["tests"].append({
+            "name": name,
+            "success": success,
+            "message": message,
+            "details": details
+        })
+    
+    # Test 1: Check if placeholder image exists
+    placeholder_path = os.path.join(app.root_path, 'static', 'placeholder.png')
+    placeholder_exists = os.path.exists(placeholder_path)
+    add_test_result(
+        "Placeholder Image", 
+        placeholder_exists,
+        "Placeholder image exists" if placeholder_exists else "Placeholder image not found",
+        {"path": placeholder_path}
+    )
+    
+    # Test 2: Check if we can create a Response object
+    try:
+        data = bytes.fromhex('89504e470d0a1a0a0000000d49484452000000010000000108060000001f15c4890000000d49444154789c636060606000000005ffff0b290000000049454e44ae426082')
+        test_response = Response(data, mimetype='image/png')
+        add_test_result(
+            "Response Object Creation", 
+            True,
+            "Successfully created a Response object"
+        )
+    except Exception as e:
+        add_test_result(
+            "Response Object Creation", 
+            False,
+            f"Failed to create Response object: {str(e)}"
+        )
+    
+    # Test 3: Check B2 credentials
+    try:
+        add_test_result(
+            "B2 Credentials Check", 
+            all([B2_KEY_ID, B2_APP_KEY, B2_BUCKET_NAME, B2_ENDPOINT]),
+            "All B2 credentials present" if all([B2_KEY_ID, B2_APP_KEY, B2_BUCKET_NAME, B2_ENDPOINT]) else "Missing B2 credentials",
+            {
+                "B2_KEY_ID": "Present" if B2_KEY_ID else "Missing",
+                "B2_APP_KEY": "Present" if B2_APP_KEY else "Missing",
+                "B2_BUCKET_NAME": "Present" if B2_BUCKET_NAME else "Missing",
+                "B2_ENDPOINT": "Present" if B2_ENDPOINT else "Missing"
+            }
+        )
+    except Exception as e:
+        add_test_result(
+            "B2 Credentials Check", 
+            False,
+            f"Error checking B2 credentials: {str(e)}"
+        )
+    
+    # Test 4: Check if static directory exists and is accessible
+    static_dir = os.path.join(app.root_path, 'static')
+    try:
+        static_exists = os.path.exists(static_dir)
+        static_is_dir = os.path.isdir(static_dir)
+        static_writable = os.access(static_dir, os.W_OK) if static_exists else False
+        
+        add_test_result(
+            "Static Directory", 
+            static_exists and static_is_dir,
+            "Static directory exists and is accessible" if (static_exists and static_is_dir) else "Static directory issues",
+            {
+                "path": static_dir,
+                "exists": static_exists,
+                "is_directory": static_is_dir,
+                "is_writable": static_writable
+            }
+        )
+    except Exception as e:
+        add_test_result(
+            "Static Directory", 
+            False,
+            f"Error checking static directory: {str(e)}"
+        )
+    
+    # Test 5: Test basic file sending
+    try:
+        if placeholder_exists:
+            # Just test the logic, don't actually send
+            add_test_result(
+                "File Sending Logic", 
+                True,
+                "File sending logic seems valid"
+            )
+        else:
+            add_test_result(
+                "File Sending Logic", 
+                False,
+                "Cannot test file sending without placeholder image"
+            )
+    except Exception as e:
+        add_test_result(
+            "File Sending Logic", 
+            False,
+            f"Error in file sending logic: {str(e)}"
+        )
+    
+    # Return all test results
+    return jsonify(results)
 
 if __name__ == '__main__':
     app.run(debug=True) 

@@ -177,7 +177,7 @@
             </div>
             
             <div class="content-options">
-                <button id="view-queue" class="action-button"><i class="fas fa-list"></i> Queue</button>
+                <!-- Queue button removed as requested -->
             </div>
             
             <!-- Home View -->
@@ -245,22 +245,11 @@
                 <div class="volume-slider">
                     <div class="volume-progress"></div>
                 </div>
-                <button id="mobile-queue" class="control-button"><i class="fas fa-list"></i></button>
             </div>
         </div>
     </div>
     
-    <div id="queue-modal" class="modal">
-        <div class="modal-content">
-            <div class="modal-header">
-                <h2>Play Queue</h2>
-                <span class="close-modal">&times;</span>
-            </div>
-            <div class="queue-container">
-                <!-- Queue items will be displayed here -->
-            </div>
-        </div>
-    </div>
+    <!-- Queue modal removed as requested -->
 
     <!-- Add to Playlist Modal -->
     <div id="add-to-playlist-modal" class="modal">
@@ -487,22 +476,18 @@
             </div>
             
             <div class="auth-tab-content active" id="login-tab">
-                <form id="login-form" class="auth-form">
+                <form id="login-form-alt" class="auth-form">
                     <div class="auth-form-group">
-                        <label for="login-email">Email or username</label>
-                        <input type="email" id="login-email" required placeholder="Email or username">
+                        <label for="login-email-alt">Email</label>
+                        <input type="email" id="login-email-alt" required placeholder="your@email.com">
                     </div>
                     <div class="auth-form-group">
-                        <label for="login-password">Password</label>
-                        <input type="password" id="login-password" required placeholder="Password">
+                        <label for="login-password-alt">Password</label>
+                        <input type="password" id="login-password-alt" required placeholder="Your password">
                     </div>
-                    <div class="auth-error" id="login-error"></div>
-                    <button type="submit" class="auth-submit-btn">Log In</button>
+                    <div class="auth-error" id="login-error-alt"></div>
+                    <button type="submit" class="auth-submit-btn">Login</button>
                 </form>
-                
-                <div class="auth-help-text">
-                    <a href="#">Forgot your password?</a>
-                </div>
                 
                 <div class="auth-divider">
                     <span>or</span>
@@ -512,13 +497,6 @@
                     <button class="auth-provider-btn" data-provider="google">
                         <i class="fab fa-google"></i> Continue with Google
                     </button>
-                    <div class="auth-provider-note">
-                        Social login configuration complete - Google sign-in enabled
-                    </div>
-                </div>
-                
-                <div class="auth-terms">
-                    By logging in, you agree to Vibify's <a href="#">Terms of Service</a> and <a href="#">Privacy Policy</a>.
                 </div>
             </div>
             
@@ -748,5 +726,15 @@
             }
         });
     </script>
+
+    <!-- Main Application Script -->
+    <script type="module" src="{{ url_for('static', filename='js/main.js') }}"></script>
+    
+    <!-- Custom Modules -->
+    <script type="module" src="{{ url_for('static', filename='js/modules/AudioPlayer.js') }}"></script>
+    <script type="module" src="{{ url_for('static', filename='js/modules/PlaylistManager.js') }}"></script>
+    <script type="module" src="{{ url_for('static', filename='js/modules/SongCache.js') }}"></script>
+    <script type="module" src="{{ url_for('static', filename='js/modules/SongListManager.js') }}"></script>
+    <script type="module" src="{{ url_for('static', filename='js/auth.js') }}"></script>
 </body>
 </html> 

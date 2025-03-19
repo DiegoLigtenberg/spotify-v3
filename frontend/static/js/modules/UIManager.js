@@ -505,6 +505,11 @@ class UIManager {
     }
 
     createSongElement(song, isActive = false) {
+        if (!song || !song.id) {
+            console.warn('Invalid song data provided to createSongElement');
+            return null;
+        }
+        
         const songElement = document.createElement('div');
         songElement.className = 'song-card';
         songElement.dataset.songId = song.id;
@@ -513,15 +518,23 @@ class UIManager {
             songElement.classList.add('playing');
         }
         
-        // Format thumbnail with lazy loading without cache-busting for better caching
-        const thumbnailSrc = `/api/thumbnail/${song.id}`;
-        const placeholderSrc = "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNkYAAAAAYAAjCB0C8AAAAASUVORK5CYII=";
+        // Check if this thumbnail is cached in the browser
+        const cachedImage = window.thumbnailCache ? window.thumbnailCache[song.id] : null;
+        
+        // Format thumbnail with improved loading and cache busting
+        // Only use cache busting if we don't have a cached version and random sample
+        // to avoid all images having the same timestamp (distributes server load)
+        const useTimestamp = !cachedImage && Math.random() < 0.2;
+        const timestamp = useTimestamp ? Date.now() : '';
+        const timestampParam = useTimestamp ? `?t=${timestamp}` : '';
+        const thumbnailSrc = `/api/thumbnail/${song.id}${timestampParam}`;
+        const placeholderSrc = "/static/images/placeholder.png";
         
         songElement.innerHTML = `
             <img src="${placeholderSrc}" 
                  data-src="${thumbnailSrc}"
                  alt="${song.title}" 
-                 loading="lazy"
+                 class="lazy-thumbnail"
                  onerror="this.onerror=null; this.src='/static/images/placeholder.png'">
             <h3>${song.title}</h3>
             <p>${song.artist || 'Unknown Artist'}</p>
@@ -532,6 +545,9 @@ class UIManager {
             </div>
         `;
         
+        // We no longer immediately load thumbnails to avoid overwhelming the browser
+        // They will be loaded by the intersection observer when they come into view
+        
         // Add click handler for the like button
         const likeButton = songElement.querySelector('.like-button');
         if (likeButton) {
@@ -540,7 +556,7 @@ class UIManager {
                 
                 if (window.playlistManager) {
                     // Toggle like state
-                    window.playlistManager.toggleLike();
+                    window.playlistManager.toggleLike(song.id);
                 } else {
                     console.error('PlaylistManager not available');
                 }

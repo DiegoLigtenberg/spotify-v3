@@ -1,0 +1,49 @@
+======================================================================
+JSON METADATA QUALITY REPORT
+======================================================================
+
+SUMMARY:
+--------------------------------------------------
+Total files analyzed: 3901
+Files with errors: 0
+Files with missing keys: 0
+Files with unusual keys: 0
+Fully compliant files: 3901 (100.0%)
+
+ALL KEYS (by frequency):
+--------------------------------------------------
+album: 3901 files (100.0%)
+artist: 3901 files (100.0%)
+audio_url: 3901 files (100.0%)
+created_at: 3901 files (100.0%)
+description: 3901 files (100.0%)
+duration: 3901 files (100.0%)
+id: 3901 files (100.0%)
+like_count: 3901 files (100.0%)
+local_paths: 3901 files (100.0%)
+release_date: 3901 files (100.0%)
+source_id: 3901 files (100.0%)
+source_url: 3901 files (100.0%)
+tags: 3901 files (100.0%)
+thumbnail_url: 3901 files (100.0%)
+title: 3901 files (100.0%)
+view_count: 3901 files (100.0%)
+
+COMMON KEYS (>90% of files):
+--------------------------------------------------
+album: 3901 files (100.0%)
+artist: 3901 files (100.0%)
+audio_url: 3901 files (100.0%)
+created_at: 3901 files (100.0%)
+description: 3901 files (100.0%)
+duration: 3901 files (100.0%)
+id: 3901 files (100.0%)
+like_count: 3901 files (100.0%)
+local_paths: 3901 files (100.0%)
+source_id: 3901 files (100.0%)
+source_url: 3901 files (100.0%)
+tags: 3901 files (100.0%)
+thumbnail_url: 3901 files (100.0%)
+title: 3901 files (100.0%)
+view_count: 3901 files (100.0%)
+release_date: 3901 files (100.0%)

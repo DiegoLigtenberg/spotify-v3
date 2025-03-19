@@ -135,21 +135,28 @@ nav ul li a.active {
     background: #282828;
     padding: 16px;
     border-radius: 8px;
-    transition: background-color 0.3s;
+    transition: background-color 0.3s, transform 0.2s;
     cursor: pointer;
     height: fit-content;
+    position: relative;
+    min-height: 250px; /* Prevent layout shifts */
+    display: flex;
+    flex-direction: column;
 }
 
 .song-card:hover {
     background: #383838;
+    transform: translateY(-2px);
 }
 
 .song-card img {
     width: 100%;
     height: auto;
+    aspect-ratio: 1 / 1; /* Maintain square ratio */
     object-fit: cover;
     border-radius: 4px;
     margin-bottom: 16px;
+    background-color: #202020; /* Base color for empty image space */
 }
 
 .song-card h3 {
@@ -1783,6 +1790,44 @@ nav ul li a.active {
     padding: 0 16px;
 }
 
+/* Add styles for liked-songs-content to enable proper scrolling */
+.liked-songs-content {
+    max-height: calc(100vh - 280px); /* Adjust this value based on your header and player heights */
+    overflow-y: auto;
+    overflow-x: hidden;
+    
+    /* Apply the same scrollbar styling as songs-container */
+    scrollbar-width: thin;
+    scrollbar-color: #535353 #121212;
+}
+
+.liked-songs-content::-webkit-scrollbar {
+    width: 12px;
+}
+
+.liked-songs-content::-webkit-scrollbar-track {
+    background: #121212;
+}
+
+.liked-songs-content::-webkit-scrollbar-thumb {
+    background-color: #535353;
+    border-radius: 20px;
+    border: 3px solid #121212;
+}
+
+.liked-songs-content::-webkit-scrollbar-thumb:hover {
+    background-color: #b3b3b3;
+}
+
+/* Hide scrollbar when not hovering */
+.liked-songs-content:not(:hover)::-webkit-scrollbar-thumb {
+    background-color: transparent;
+}
+
+.liked-songs-content:not(:hover) {
+    scrollbar-color: transparent #121212;
+}
+
 .liked-songs-header h2 {
     font-size: 24px;
     font-weight: 700;
@@ -2094,4 +2139,13 @@ nav ul li a.active {
     .confirmation-buttons button {
         width: 100%;
     }
+}
+
+/* Performance optimizations for images and scrolling */
+.load-more-sentinel {
+    height: 20px;
+    width: 100%;
+    margin: 20px 0;
+    opacity: 0;
+    background: transparent;
 } 
