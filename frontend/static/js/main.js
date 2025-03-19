@@ -518,6 +518,9 @@ class MusicPlayer {
         // Add like toggle handler
         this.uiManager.onLikeToggle = () => this.toggleLike();
         
+        // Add album art click handler to show song metadata
+        this.uiManager.onAlbumArtClick = () => this.showSongMetadata();
+        
         this.uiManager.onProgressClick = (position) => {
             if (!this.audio.duration) return;
             
