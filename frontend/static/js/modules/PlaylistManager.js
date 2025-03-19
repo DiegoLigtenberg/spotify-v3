@@ -574,11 +574,20 @@ class PlaylistManager {
             const thumbnailContainer = document.createElement('div');
             thumbnailContainer.className = 'song-thumbnail';
             const thumbnail = document.createElement('img');
-            thumbnail.src = song.thumbnailUrl || '/static/images/placeholder.png';
+            
+            // Format thumbnail src with proper API endpoint
+            const thumbnailUrl = `/api/thumbnail/${song.id}`;
+            const placeholderUrl = '/static/images/placeholder.png';
+            
+            // Use lazy loading pattern (placeholder as src, real image as data-src)
+            thumbnail.src = placeholderUrl;
+            thumbnail.setAttribute('data-src', thumbnailUrl);
+            thumbnail.className = 'lazy-thumbnail';
             thumbnail.alt = `${song.title} by ${song.artist}`;
             thumbnail.onerror = function() {
-                this.src = '/static/images/placeholder.png';
+                this.src = placeholderUrl;
             };
+            
             thumbnailContainer.appendChild(thumbnail);
             songInfo.appendChild(thumbnailContainer);
             
@@ -650,6 +659,12 @@ class PlaylistManager {
         
         // Log final state
         console.log(`Rendered ${container.children.length} song rows in liked songs table`);
+        
+        // Setup lazy loading for all thumbnails
+        setTimeout(() => {
+            this._setupLazyLoading();
+            console.log('Lazy loading setup completed for liked songs thumbnails');
+        }, 100);
     }
     
     _setupLazyLoading() {
@@ -1668,7 +1683,6 @@ class PlaylistManager {
                 .filter(song => song && song.id) // Filter out invalid songs
                 .map(song => ({
                     ...song,
-                    thumbnailUrl: song.thumbnailUrl || null,
                     isLiked: true
                 }));
             
