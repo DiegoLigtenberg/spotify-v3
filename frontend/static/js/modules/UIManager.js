@@ -553,10 +553,22 @@ class UIManager {
         if (likeButton) {
             likeButton.addEventListener('click', (e) => {
                 e.stopPropagation(); // Prevent song click event
+                e.preventDefault(); // Prevent any default browser behavior
+                
+                // Ensure we keep the scroll position
+                const container = likeButton.closest('.songs-container');
+                const scrollTop = container ? container.scrollTop : 0;
                 
                 if (window.playlistManager) {
                     // Toggle like state
                     window.playlistManager.toggleLike(song.id);
+                    
+                    // Restore scroll position
+                    if (container) {
+                        requestAnimationFrame(() => {
+                            container.scrollTop = scrollTop;
+                        });
+                    }
                 } else {
                     console.error('PlaylistManager not available');
                 }

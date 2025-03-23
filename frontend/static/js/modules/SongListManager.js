@@ -300,12 +300,16 @@ class SongListManager {
     }
 
     async loadSongsAroundIndex(index) {
-        if (this.isLoading) return;
+        // IMPORTANT: This method is now disabled during song selection to prevent list jumps
+        // It's only used for background loading of additional songs
+        
+        if (this.isLoading || window.musicPlayer?.ignoreNextDisplayCall) return;
 
         const startOffset = Math.max(0, index - this.config.loadChunk);
         
         try {
             this.isLoading = true;
+            
             // Don't use random mode for specific index loading
             const response = await fetch(`/api/songs?offset=${startOffset}&limit=${this.config.loadChunk * 2 + 1}`);
             if (!response.ok) throw new Error(`HTTP error! status: ${response.status}`);
@@ -313,22 +317,23 @@ class SongListManager {
             
             if (!this.totalSongsCount) this.totalSongsCount = data.total;
 
+            // Store the songs in memory, but DON'T update the display
+            // This is just for background loading without visual changes
             const existingSongIds = new Set(this.songs.map(s => s.id));
             data.songs.forEach(song => {
                 if (!existingSongIds.has(song.id)) {
+                    this.songIdSet.add(song.id);
+                    // Add to the end of the list - don't reorder existing songs
                     this.songs.push(song);
                 }
             });
 
-            if (this.songs.length > this.config.visibleSongs) {
-                const start = Math.max(0, index - Math.floor(this.config.visibleSongs / 2));
-                this.songs = this.songs.slice(start, start + this.config.visibleSongs);
-            }
-
-            this.displaySongs();
+            // IMPORTANT: Don't redisplay or change the UI in any way
+            // This keeps the current list/view stable
+            
+            console.log(`Silently loaded ${data.songs.length} additional songs in memory around index ${index}`);
         } catch (error) {
             console.error('Error loading songs around index:', error);
-            throw error;
         } finally {
             this.isLoading = false;
         }
