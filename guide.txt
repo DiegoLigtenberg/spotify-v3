@@ -1,0 +1,97 @@
+Infinite Scroll Implementation Guide
+
+1. Core Concept
+---------------
+- We have a large list of songs in the database
+- We maintain a "window" of loaded songs in memory
+- The scroll bar represents only this window of loaded songs
+- We never see the same song twice (unlike infinite runner games)
+- We're actually moving through the entire song list
+
+2. Window Management
+-------------------
+- Window size: ~110 songs total
+  * ~60 songs visible in viewport
+  * ~50 songs loaded but not visible (buffer)
+- As we scroll:
+  * Remove old songs from the beginning
+  * Load new songs at the end
+  * Maintain window size constant
+  * Track position in overall song list
+
+3. Scroll Bar Implementation
+---------------------------
+- Scroll bar represents only the loaded songs window
+- Create preload zones at top and bottom (50% threshold)
+- Artificially extend scroll bar height to include preload zones
+- When user scrolls into preload zones:
+  * Load new songs
+  * Update window content
+  * Maintain scroll position
+
+4. Backend Requirements
+----------------------
+- Endpoint: /api/songs
+- Parameters:
+  * offset: Current position in song list
+  * limit: Number of songs to load
+- Returns:
+  * songs: Array of song objects
+  * total: Total number of songs
+  * has_more: Boolean indicating if more songs exist
+
+5. Implementation Steps
+----------------------
+a. SongListManager Class:
+   - Maintain window of loaded songs
+   - Track current position in overall list
+   - Handle scroll events and preloading
+   - Manage scroll bar illusion
+
+b. Frontend Display:
+   - Render visible songs
+   - Handle scroll position
+   - Manage preload zones
+   - Update scroll bar size
+
+c. Backend:
+   - Implement pagination
+   - Return correct song batches
+   - Track total song count
+
+6. Key Methods to Implement
+--------------------------
+- _loadMoreSongs(): Load new songs based on position
+- _preloadMoreSongs(): Handle preloading in scroll zones
+- _maintainScrollPosition(): Keep scroll position correct
+- _renderSongs(): Update DOM with current window
+- _initScrollHandler(): Set up scroll event handling
+
+7. Memory Management
+-------------------
+- Keep only window of songs in memory
+- Remove old songs when scrolling
+- Load new songs as needed
+- Maintain efficient DOM updates
+
+8. Edge Cases to Handle
+----------------------
+- Reaching end of song list
+- Quick scrolling
+- Window resize
+- Song loading failures
+
+9. Performance Considerations
+---------------------------
+- Batch DOM updates
+- Efficient song removal/addition
+- Smooth scroll position maintenance
+- Minimal reflows/repaints
+
+10. Testing Requirements
+-----------------------
+- Scroll position maintenance
+- Preloading behavior
+- Memory usage
+- Smooth scrolling
+- Edge case handling 

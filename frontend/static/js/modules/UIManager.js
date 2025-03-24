@@ -518,13 +518,10 @@ class UIManager {
             songElement.classList.add('playing');
         }
         
-        // Check if this thumbnail is cached in the browser
-        const cachedImage = window.thumbnailCache ? window.thumbnailCache[song.id] : null;
-        
         // Format thumbnail with improved loading and cache busting
         // Only use cache busting if we don't have a cached version and random sample
         // to avoid all images having the same timestamp (distributes server load)
-        const useTimestamp = !cachedImage && Math.random() < 0.2;
+        const useTimestamp = Math.random() < 0.2;
         const timestamp = useTimestamp ? Date.now() : '';
         const timestampParam = useTimestamp ? `?t=${timestamp}` : '';
         const thumbnailSrc = `/api/thumbnail/${song.id}${timestampParam}`;
@@ -535,7 +532,7 @@ class UIManager {
                  data-src="${thumbnailSrc}"
                  alt="${song.title}" 
                  class="lazy-thumbnail"
-                 onerror="this.onerror=null; this.src='/static/images/placeholder.png'">
+                 onerror="this.onerror=null; this.src='${placeholderSrc}'">
             <h3>${song.title}</h3>
             <p>${song.artist || 'Unknown Artist'}</p>
             <div class="song-actions">
@@ -544,9 +541,6 @@ class UIManager {
                 </button>
             </div>
         `;
-        
-        // We no longer immediately load thumbnails to avoid overwhelming the browser
-        // They will be loaded by the intersection observer when they come into view
         
         // Add click handler for the like button
         const likeButton = songElement.querySelector('.like-button');

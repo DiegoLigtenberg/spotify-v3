@@ -453,8 +453,8 @@ class MusicPlayer {
         // Initialize song list manager with elements and config
         this.songListContainer = document.querySelector('.songs-container');
         this.songListManager = new SongListManager(this.songListContainer, {
-            loadChunk: 20,
-            totalSongs: 100,
+            loadChunk: 15,
+            totalSongs: 40,
             cooldownTime: 500
         });
         
@@ -769,315 +769,99 @@ class MusicPlayer {
         loadNextThumbnail();
     }
 
+    /**
+     * Display songs in the song container
+     * @param {Array} songs - Array of song objects to display
+     */
     displaySongs(songs) {
+        if (!songs || !Array.isArray(songs) || songs.length === 0) {
+            console.log('No songs to display');
+            return;
+        }
+
+        // Ignore display calls during song selection to prevent UI jumps
+        if (this.isSelectingSong) {
+            console.log('Ignoring display call during song selection');
+            return;
+        }
+
         const container = document.querySelector('.songs-container');
         if (!container) {
-            console.error('Songs container element not found');
+            console.error('Songs container not found');
             return;
         }
-        
-        // Save current scroll position before making any changes
-        const scrollTop = container.scrollTop;
-        
-        // If this is a song selection (and not a new list load), just update active state and return
-        if (this.ignoreNextDisplayCall) {
-            this.ignoreNextDisplayCall = false;
-            this.updateActiveSongInList(this.currentSong ? this.currentSong.id : null);
-            return;
-        }
-        
-        // Only clear and rebuild the list if it's a newly loaded list, not just a song selection
-        const newListId = this.generateListId(songs);
-        const shouldRebuildList = !container.dataset.renderedListId || 
-                                  (this.lastRenderedListId !== newListId);
-        
-        // Don't rebuild the list if only the currently playing song changed
-        if (shouldRebuildList) {
-            // Store a hash or identifier for this list to avoid rebuilding the same list multiple times
-            this.lastRenderedListId = newListId;
-            container.dataset.renderedListId = this.lastRenderedListId;
-            
-            // Instead of clearing and rebuilding from scratch, we'll update efficiently
-            const existingCards = Array.from(container.querySelectorAll('.song-card'));
-            const existingIds = new Map(existingCards.map(card => [card.dataset.songId, card]));
-            
-            // Find what we need to add and what we can keep
+
+        // Clear existing songs
+        container.innerHTML = '';
+
+        // Render songs in batches for better performance
+        const batchSize = 30;
+        const renderBatch = (startIndex, endIndex) => {
             const fragment = document.createDocumentFragment();
-            const cardsToKeep = new Set();
             
-            // First, handle up to MAX_SONGS_TO_RENDER
-            const MAX_SONGS_TO_RENDER = 50;
-            const songsToRender = songs.slice(0, MAX_SONGS_TO_RENDER);
-            const remainingSongs = songs.slice(MAX_SONGS_TO_RENDER);
-            
-            // Create a new ordered list of elements
-            for (const song of songsToRender) {
+            for (let i = startIndex; i < endIndex; i++) {
+                const song = songs[i];
                 if (!song) continue;
-                
-                // Check if song already has a card in the DOM
-                const existingCard = existingIds.get(song.id);
-                
-                if (existingCard) {
-                    // Mark this card to keep
-                    cardsToKeep.add(song.id);
-                    
-                    // Update playing status if needed
-                    if (this.currentSong && song.id === this.currentSong.id) {
-                        existingCard.classList.add('playing');
-                    } else {
-                        existingCard.classList.remove('playing');
-                    }
-                    
-                    // We'll move this card to the correct position later
-                    // Don't add it to the fragment yet
-                } else {
-                    // Create a new card for this song
-                    const songElement = this.uiManager.createSongElement(
-                        song,
-                        this.currentSong && song.id === this.currentSong.id
-                    );
-                    
-                    if (songElement) {
-                        // IMPORTANT: Remove direct click handler and use event delegation instead
-                        // The click handler is now managed centrally in setupEventListeners
-                        fragment.appendChild(songElement);
-                    }
-                }
-            }
-            
-            // Clear any cards that don't need to be kept
-            for (const card of existingCards) {
-                if (!cardsToKeep.has(card.dataset.songId)) {
-                    card.remove();
-                }
-            }
-            
-            // Now rearrange the existing cards and add new ones in correct order
-            // We'll add all cards to a fragment in the right order
-            const orderedFragment = document.createDocumentFragment();
-            
-            songsToRender.forEach(song => {
-                if (!song) return;
-                
-                const existingCard = existingIds.get(song.id);
-                if (existingCard) {
-                    // Move existing card to the fragment in the correct order
-                    orderedFragment.appendChild(existingCard);
-                } else {
-                    // Find the newly created card in the original fragment
-                    const newCards = fragment.querySelectorAll(`.song-card[data-song-id="${song.id}"]`);
-                    if (newCards.length > 0) {
-                        orderedFragment.appendChild(newCards[0]);
-                    }
-                }
-            });
-            
-            // Clear container and add the ordered fragment
-            container.innerHTML = '';
-            container.appendChild(orderedFragment);
-            
-            // Setup for infinite scrolling if there are more songs
-            if (remainingSongs.length > 0) {
-                // Create a sentinel element to detect when to load more
-                const sentinel = document.createElement('div');
-                sentinel.className = 'load-more-sentinel';
-                sentinel.style.height = '20px';
-                sentinel.style.width = '100%';
-                container.appendChild(sentinel);
-                
-                // Set up the intersection observer for infinite scrolling
-                const observerOptions = {
-                    root: null,
-                    rootMargin: '100px',
-                    threshold: 0.1
-                };
-                
-                // Keep track of if we're already loading to prevent multiple loads
-                let isLoadingMore = false;
-                
-                const loadMoreObserver = new IntersectionObserver((entries) => {
-                    entries.forEach(entry => {
-                        if (entry.isIntersecting && !isLoadingMore) {
-                            isLoadingMore = true;
-                            console.log('Loading more songs as user scrolled down');
-                            
-                            // Load the next batch with a small delay to not block the UI
-                            setTimeout(() => {
-                                // Remove the sentinel
-                                sentinel.remove();
-                                
-                                // Determine how many more songs to load
-                                const nextBatch = remainingSongs.splice(0, 20);
-                                
-                                // Add the next batch
-                                const batchFragment = document.createDocumentFragment();
-                                nextBatch.forEach(song => {
-                                    if (!song) return;
-                                    
-                                    const songElement = this.uiManager.createSongElement(
-                                        song,
-                                        this.currentSong && song.id === this.currentSong.id
-                                    );
-                                    
-                                    if (songElement) {
-                                        // IMPORTANT: Remove direct click handler and use event delegation instead
-                                        // The click handler is now managed centrally in setupEventListeners
-                                        batchFragment.appendChild(songElement);
-                                    }
-                                });
-                                
-                                container.appendChild(batchFragment);
-                                
-                                // If there are still more songs, add a new sentinel
-                                if (remainingSongs.length > 0) {
-                                    container.appendChild(sentinel);
-                                    isLoadingMore = false;
-                                } else {
-                                    // Clean up the observer
-                                    loadMoreObserver.disconnect();
-                                }
-                                
-                                // Setup lazy loading for the new images
-                                this._setupLazyLoading();
-                            }, 100);
-                        }
-                    });
-                }, observerOptions);
-                
-                // Start observing the sentinel
-                loadMoreObserver.observe(sentinel);
-            }
-            
-            // Set up lazy loading for images
-            this._setupLazyLoading();
-            
-            // Restore the scroll position
-            requestAnimationFrame(() => {
-                container.scrollTop = scrollTop;
-            });
-        } else {
-            // Just update the active song state without redrawing
-            this.updateActiveSongInList(this.currentSong ? this.currentSong.id : null);
-        }
-    }
 
-    // Helper method to generate a unique identifier for a list of songs
-    generateListId(songs) {
-        if (!songs || !songs.length) return 'empty';
-        // Use the first few and last few song IDs to create a list identifier
-        const sampleSize = Math.min(5, songs.length);
-        const firstIds = songs.slice(0, sampleSize).map(s => s.id);
-        const lastIds = songs.slice(-sampleSize).map(s => s.id);
-        return `${firstIds.join('-')}-${songs.length}-${lastIds.join('-')}`;
-    }
-
-    _setupLazyLoading() {
-        // Use Intersection Observer for better lazy loading performance
-        if ('IntersectionObserver' in window) {
-            // Only create one observer if it doesn't exist yet
-            if (!this.lazyImageObserver) {
-                this.lazyImageObserver = new IntersectionObserver((entries, observer) => {
-                    // Process a batch of images using setTimeout to avoid blocking the UI
-                    const processEntries = (index) => {
-                        // Process 5 entries at a time
-                        const batchSize = 5;
-                        const end = Math.min(index + batchSize, entries.length);
-                        
-                        for (let i = index; i < end; i++) {
-                            const entry = entries[i];
-                            if (entry.isIntersecting) {
-                                const lazyImage = entry.target;
-                                const src = lazyImage.getAttribute('data-src');
-                                
-                                if (src) {
-                                    // Set the image source and add an onload event
-                                    const img = new Image();
-                                    img.onload = () => {
-                                        lazyImage.src = src;
-                                        lazyImage.classList.add('loaded');
-                                        // Store in cache to prevent unnecessary reloads
-                                        if (!window.thumbnailCache) window.thumbnailCache = {};
-                                        const songId = lazyImage.closest('.song-card')?.dataset.songId;
-                                        if (songId) window.thumbnailCache[songId] = true;
-                                    };
-                                    img.onerror = () => {
-                                        lazyImage.src = '/static/images/placeholder.png';
-                                        lazyImage.classList.add('error');
-                                    };
-                                    img.src = src;
-                                    
-                                    // Remove data-src to prevent double loading
-                                    lazyImage.removeAttribute('data-src');
-                                    observer.unobserve(lazyImage);
-                                }
-                            }
-                        }
-                        
-                        // If there are more entries to process, schedule the next batch
-                        if (end < entries.length) {
-                            setTimeout(() => processEntries(end), 10);
-                        }
-                    };
-                    
-                    // Start processing entries
-                    processEntries(0);
-                }, {
-                    root: null,
-                    rootMargin: '100px', // Load images 100px before they enter the viewport
-                    threshold: 0.1
-                });
+                const songCard = this.uiManager.createSongElement(song);
+                if (songCard) {
+                    fragment.appendChild(songCard);
+                }
             }
             
-            // Start observing all lazy images
-            const lazyImages = document.querySelectorAll('img.lazy-thumbnail');
-            lazyImages.forEach(lazyImage => {
-                // Only observe images that have data-src (not already loaded)
-                if (lazyImage.hasAttribute('data-src')) {
-                    this.lazyImageObserver.observe(lazyImage);
-                }
-            });
-        } else {
-            // Fallback for browsers without IntersectionObserver
-            this._setupLegacyLazyLoading();
-        }
-    }
-
-    // Legacy lazy loading for browsers without Intersection Observer
-    _setupLegacyLazyLoading() {
-        const lazyImages = [].slice.call(document.querySelectorAll('img.lazy-thumbnail'));
-        
-        if (lazyImages.length === 0) {
-            return;
-        }
-
-        const lazyImageLoad = () => {
-            const scrollTop = window.pageYOffset;
-            lazyImages.forEach(img => {
-                if (img.offsetTop < (window.innerHeight + scrollTop)) {
-                    const src = img.getAttribute('data-src');
-                    if (src) {
-                        img.src = src;
-                        img.addEventListener('load', () => {
-                            img.classList.add('loaded');
-                        });
-                        img.removeAttribute('data-src');
-                    }
-                }
-            });
-            
-            if (lazyImages.length === 0) { 
-                document.removeEventListener('scroll', lazyImageLoad);
-                window.removeEventListener('resize', lazyImageLoad);
-                window.removeEventListener('orientationChange', lazyImageLoad);
-            }
+            container.appendChild(fragment);
         };
 
-        document.addEventListener('scroll', lazyImageLoad);
-        window.addEventListener('resize', lazyImageLoad);
-        window.addEventListener('orientationChange', lazyImageLoad);
-        
-        // Initial load
-        setTimeout(lazyImageLoad, 20);
+        // Render first batch immediately
+        renderBatch(0, Math.min(batchSize, songs.length));
+
+        // Set up virtualized scrolling for the rest
+        if (songs.length > batchSize) {
+            const sentinel = document.createElement('div');
+            sentinel.className = 'infinite-scroll-sentinel';
+            container.appendChild(sentinel);
+
+            const observer = new IntersectionObserver((entries) => {
+                entries.forEach(entry => {
+                    if (entry.isIntersecting) {
+                        const currentCount = container.children.length - 1; // -1 for sentinel
+                        if (currentCount < songs.length) {
+                            renderBatch(currentCount, Math.min(currentCount + batchSize, songs.length));
+                        }
+                    }
+                });
+            }, {
+                root: container,
+                rootMargin: '100px'
+            });
+
+            observer.observe(sentinel);
+        }
+
+        // Set up lazy loading for images
+        const lazyLoadImages = () => {
+            const imageObserver = new IntersectionObserver((entries) => {
+                entries.forEach(entry => {
+                    if (entry.isIntersecting) {
+                        const img = entry.target;
+                        const src = img.getAttribute('data-src');
+                        if (src) {
+                            img.src = src;
+                            img.removeAttribute('data-src');
+                        }
+                    }
+                });
+            }, {
+                rootMargin: '50px'
+            });
+
+            container.querySelectorAll('.lazy-thumbnail').forEach(img => {
+                imageObserver.observe(img);
+            });
+        };
+
+        // Initialize lazy loading after a short delay
+        setTimeout(lazyLoadImages, 100);
     }
 
     /**
@@ -1695,6 +1479,28 @@ class MusicPlayer {
         }
         // Final fallback to the first songs container
         return document.querySelector('.songs-container');
+    }
+
+    /**
+     * Get all song cards that are currently visible in the viewport
+     * @param {Element} container - The scrollable container
+     * @returns {Array} - Array of visible song card elements
+     * @private
+     */
+    _getVisibleSongCards(container) {
+        const allCards = Array.from(container.querySelectorAll('.song-card'));
+        if (!allCards.length) return [];
+        
+        const scrollTop = container.scrollTop;
+        const scrollBottom = scrollTop + container.clientHeight;
+        
+        return allCards.filter(card => {
+            const cardTop = card.offsetTop;
+            const cardBottom = cardTop + card.offsetHeight;
+            
+            // Card is visible if part of it is in the viewport
+            return (cardBottom > scrollTop && cardTop < scrollBottom);
+        });
     }
 }
 
