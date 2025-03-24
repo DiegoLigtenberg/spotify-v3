@@ -123,16 +123,16 @@ nav ul li a.active {
 
 .tags-dropdown {
     margin-bottom: 24px;
-    max-width: 200px;
+    max-width: 150px;
     flex-shrink: 0;
 }
 
 .tags-select {
     width: 100%;
-    padding: 8px 32px 8px 12px;
+    padding: 8px 28px 8px 12px;
     border-radius: 4px;
-    border: 1px solid rgba(255, 255, 255, 0.1);
-    background-color: rgba(255, 255, 255, 0.1);
+    border: none;
+    background-color: rgba(0, 0, 0, 0.4);
     color: #ffffff;
     font-size: 14px;
     cursor: pointer;
@@ -142,17 +142,17 @@ nav ul li a.active {
     background-image: url("data:image/svg+xml;charset=UTF-8,%3csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%23ffffff' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3e%3cpolyline points='6 9 12 15 18 9'%3e%3c/polyline%3e%3c/svg%3e");
     background-repeat: no-repeat;
     background-position: right 8px center;
-    background-size: 16px;
+    background-size: 14px;
 }
 
 .tags-select:hover {
-    background-color: rgba(255, 255, 255, 0.2);
+    background-color: rgba(0, 0, 0, 0.6);
 }
 
 .tags-select:focus {
     outline: none;
-    background-color: rgba(255, 255, 255, 0.2);
-    border-color: #ffffff;
+    background-color: rgba(0, 0, 0, 0.6);
+    box-shadow: 0 0 0 1px #ffffff;
 }
 
 .tags-select option {
