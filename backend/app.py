@@ -178,7 +178,8 @@ def get_songs():
             offset = int(request.args.get('offset', '0'))
             random_mode = request.args.get('random', 'false').lower() == 'true'
             thumbnails_only = request.args.get('thumbnails_only', 'true').lower() == 'true'
-            logger.info(f"Fetching songs with limit {page_size}, offset {offset}, random={random_mode}, thumbnails_only={thumbnails_only}")
+            tag = request.args.get('tag', '')  # Get tag parameter
+            logger.info(f"Fetching songs with limit {page_size}, offset {offset}, random={random_mode}, thumbnails_only={thumbnails_only}, tag={tag}")
         except ValueError:
             logger.error("Invalid pagination parameters")
             return jsonify({'error': 'Invalid pagination parameters'}), 400
@@ -197,31 +198,102 @@ def get_songs():
         else:
             app.thumbnail_cache_timestamp = time.time()
 
-        # First get total count without thumbnail filtering
-        count_response = supabase.table('songs').select('*', count='exact').execute()
-        total_count = count_response.count if hasattr(count_response, 'count') else 0
-        logger.info(f"Total songs in database: {total_count}")
-
-        # Build the query
-        query = supabase.table('songs').select('*')
-        
-        # Apply ordering - random or by most recent
-        if random_mode:
-            # PostgreSQL random() function for true randomization
-            query = query.order('random()', desc=False)
-        else:
-            # Default to showing newest songs first
-            query = query.order('updated_at', desc=True)
+        # If tag filtering is enabled, we need to use a different query
+        if tag:
+            logger.info(f"Filtering songs by tag: {tag}")
             
-        # Apply pagination - get more than needed to account for thumbnail filtering
-        expanded_limit = page_size * 3 if thumbnails_only else page_size
-        query = query.range(offset, offset + expanded_limit - 1)
-        
-        # Execute query
-        response = query.execute()
-        
-        songs = response.data
-        logger.info(f"Retrieved {len(songs)} songs before thumbnail filtering")
+            # Get tag ID first
+            tag_response = supabase.table('tags').select('id').eq('name', tag).execute()
+            
+            if not tag_response.data:
+                logger.warning(f"Tag '{tag}' not found")
+                return jsonify({
+                    'songs': [],
+                    'total': 0,
+                    'offset': offset,
+                    'limit': page_size,
+                    'has_more': False,
+                    'random': random_mode,
+                    'thumbnails_only': thumbnails_only,
+                    'tag': tag
+                })
+            
+            tag_id = tag_response.data[0]['id']
+            
+            # Get songs with this tag using a join query
+            # First get song IDs that have this tag
+            song_ids_query = supabase.from_('song_tags') \
+                .select('song_id') \
+                .eq('tag_id', tag_id)
+                
+            if random_mode:
+                # Add randomization if needed
+                song_ids_query = song_ids_query.order('random()', desc=False)
+                
+            # Apply pagination
+            song_ids_query = song_ids_query.range(offset, offset + page_size * 3 - 1)
+            song_ids_response = song_ids_query.execute()
+            
+            if not song_ids_response.data:
+                logger.warning(f"No songs found with tag '{tag}'")
+                return jsonify({
+                    'songs': [],
+                    'total': 0,
+                    'offset': offset,
+                    'limit': page_size,
+                    'has_more': False,
+                    'random': random_mode,
+                    'thumbnails_only': thumbnails_only,
+                    'tag': tag
+                })
+                
+            # Extract song IDs
+            song_ids = [item['song_id'] for item in song_ids_response.data]
+            
+            # Get song details for these IDs
+            songs_query = supabase.table('songs').select('*').in_('id', song_ids)
+            
+            if not random_mode:
+                # Apply normal ordering if not in random mode
+                songs_query = songs_query.order('updated_at', desc=True)
+                
+            songs_response = songs_query.execute()
+            songs = songs_response.data
+            
+            # Get the total count of songs with this tag for pagination
+            count_response = supabase.from_('song_tags') \
+                .select('song_id', count='exact') \
+                .eq('tag_id', tag_id) \
+                .execute()
+            total_count = count_response.count if hasattr(count_response, 'count') else 0
+            
+            logger.info(f"Found {len(songs)} songs with tag '{tag}' (total: {total_count})")
+        else:
+            # First get total count without thumbnail filtering
+            count_response = supabase.table('songs').select('*', count='exact').execute()
+            total_count = count_response.count if hasattr(count_response, 'count') else 0
+            logger.info(f"Total songs in database: {total_count}")
+
+            # Build the query
+            query = supabase.table('songs').select('*')
+            
+            # Apply ordering - random or by most recent
+            if random_mode:
+                # PostgreSQL random() function for true randomization
+                query = query.order('random()', desc=False)
+            else:
+                # Default to showing newest songs first
+                query = query.order('updated_at', desc=True)
+                
+            # Apply pagination - get more than needed to account for thumbnail filtering
+            expanded_limit = page_size * 3 if thumbnails_only else page_size
+            query = query.range(offset, offset + expanded_limit - 1)
+            
+            # Execute query
+            response = query.execute()
+            
+            songs = response.data
+            logger.info(f"Retrieved {len(songs)} songs before thumbnail filtering")
         
         # If thumbnails_only is true, filter songs to only those with thumbnails
         if thumbnails_only:
@@ -342,7 +414,8 @@ def get_songs():
             'limit': page_size,
             'has_more': len(songs) > page_size or (offset + len(songs)) < total_count,
             'random': random_mode,
-            'thumbnails_only': thumbnails_only
+            'thumbnails_only': thumbnails_only,
+            'tag': tag
         })
     except Exception as e:
         logger.error(f"Error getting songs: {e}")
@@ -1188,6 +1261,27 @@ def debug_thumbnail():
     
     # Return all test results
     return jsonify(results)
+
+@app.route('/api/top-tags')
+def get_top_tags_api():
+    """Get the top tags for the frontend dropdown"""
+    try:
+        # Import the get_top_tags function here to avoid circular imports
+        from get_top_tags import get_top_tags
+        
+        # Get the top 10 tags
+        top_tags = get_top_tags()
+        
+        # Format the response
+        formatted_tags = [{"name": tag_name, "count": count} for tag_name, count in top_tags]
+        
+        return jsonify({
+            "success": True,
+            "tags": formatted_tags
+        })
+    except Exception as e:
+        logger.error(f"Error getting top tags: {str(e)}")
+        return jsonify({"success": False, "error": str(e)}), 500
 
 if __name__ == '__main__':
     app.run(debug=True) 

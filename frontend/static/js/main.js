@@ -573,6 +573,28 @@ class MusicPlayer {
                 }
             }
         });
+
+        // Set up tag filter dropdown
+        const tagSelect = document.getElementById('top-tags');
+        if (tagSelect) {
+            tagSelect.addEventListener('change', (event) => {
+                const selectedTag = event.target.value;
+                
+                // If we're not on the home view, switch to it
+                const homeView = document.getElementById('home-view');
+                const activeView = document.querySelector('.view-container.active');
+                
+                if (activeView !== homeView) {
+                    const navItem = document.querySelector('.sidebar-nav-item[data-view="home"]');
+                    if (navItem) {
+                        navItem.click();
+                    }
+                }
+                
+                // Update song list with the selected tag
+                this.songListManager.setTag(selectedTag);
+            });
+        }
     }
 
     async initializeApplication() {
@@ -585,6 +607,9 @@ class MusicPlayer {
             // Create global reference to the music player for other components
             window.musicPlayer = this;
             console.log('Set global musicPlayer reference');
+            
+            // Load top tags for the dropdown
+            this._loadTopTags();
             
             // Try to load songs from cache first for immediate display
             const cachedSongs = await this.songCache.getCachedSongs();
@@ -1501,6 +1526,44 @@ class MusicPlayer {
             // Card is visible if part of it is in the viewport
             return (cardBottom > scrollTop && cardTop < scrollBottom);
         });
+    }
+
+    // Add a method to load top tags for the dropdown
+    async _loadTopTags() {
+        try {
+            const tagSelect = document.getElementById('top-tags');
+            if (!tagSelect) return;
+            
+            // Keep the first option (default)
+            const defaultOption = tagSelect.options[0];
+            
+            // Fetch top tags from API
+            const response = await fetch('/api/top-tags');
+            if (!response.ok) {
+                throw new Error(`Failed to fetch top tags: ${response.status}`);
+            }
+            
+            const data = await response.json();
+            if (!data.success || !data.tags || !Array.isArray(data.tags)) {
+                throw new Error('Invalid response format for top tags');
+            }
+            
+            // Clear existing options except the default one
+            tagSelect.innerHTML = '';
+            tagSelect.appendChild(defaultOption);
+            
+            // Add top tags as options
+            data.tags.forEach(tag => {
+                const option = document.createElement('option');
+                option.value = tag.name;
+                option.textContent = `${tag.name} (${tag.count})`;
+                tagSelect.appendChild(option);
+            });
+            
+            console.log(`Loaded ${data.tags.length} top tags`);
+        } catch (error) {
+            console.error('Error loading top tags:', error);
+        }
     }
 }
 

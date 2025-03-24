@@ -8,6 +8,7 @@ class SongListManager {
         this.totalSongsCount = 0;
         this.songIdSet = new Set();
         this.randomMode = options.randomMode || false;
+        this.currentTag = '';
         
         // Configuration
         this.config = {
@@ -79,7 +80,13 @@ class SongListManager {
                 : Math.max(0, this.currentOffset - this.config.batchSize);
             
             // Fetch new songs
-            const url = `/api/songs?offset=${fetchOffset}&limit=${this.config.batchSize}${this.randomMode ? '&random=true' : ''}`;
+            let url = `/api/songs?offset=${fetchOffset}&limit=${this.config.batchSize}${this.randomMode ? '&random=true' : ''}`;
+            
+            // Add tag parameter if set
+            if (this.currentTag) {
+                url += `&tag=${encodeURIComponent(this.currentTag)}`;
+            }
+            
             const response = await fetch(url);
             
             if (!response.ok) throw new Error(`HTTP error! status: ${response.status}`);
@@ -219,6 +226,16 @@ class SongListManager {
             song.title.toLowerCase().includes(term) || 
             song.artist.toLowerCase().includes(term)
         );
+    }
+    
+    async setTag(tagName) {
+        if (this.currentTag === tagName) return;
+        
+        console.log(`Setting tag filter to: ${tagName || 'none'}`);
+        this.currentTag = tagName;
+        this.reset();
+        
+        await this._loadMoreSongs('down');
     }
 }
 
