@@ -121,6 +121,46 @@ nav ul li a.active {
     color: #757575;
 }
 
+.tags-dropdown {
+    margin-bottom: 24px;
+    max-width: 200px;
+    flex-shrink: 0;
+}
+
+.tags-select {
+    width: 100%;
+    padding: 8px 32px 8px 12px;
+    border-radius: 4px;
+    border: 1px solid rgba(255, 255, 255, 0.1);
+    background-color: rgba(255, 255, 255, 0.1);
+    color: #ffffff;
+    font-size: 14px;
+    cursor: pointer;
+    appearance: none;
+    -webkit-appearance: none;
+    -moz-appearance: none;
+    background-image: url("data:image/svg+xml;charset=UTF-8,%3csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%23ffffff' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3e%3cpolyline points='6 9 12 15 18 9'%3e%3c/polyline%3e%3c/svg%3e");
+    background-repeat: no-repeat;
+    background-position: right 8px center;
+    background-size: 16px;
+}
+
+.tags-select:hover {
+    background-color: rgba(255, 255, 255, 0.2);
+}
+
+.tags-select:focus {
+    outline: none;
+    background-color: rgba(255, 255, 255, 0.2);
+    border-color: #ffffff;
+}
+
+.tags-select option {
+    background-color: #282828;
+    color: #ffffff;
+    padding: 8px;
+}
+
 .songs-container {
     display: grid;
     grid-template-columns: repeat(auto-fill, minmax(180px, 1fr));
@@ -1425,14 +1465,9 @@ nav ul li a.active {
 }
 
 .close-modal {
-    color: #aaa;
-    font-size: 24px;
     cursor: pointer;
-    transition: color 0.2s;
-}
-
-.close-modal:hover {
-    color: white;
+    font-size: 22px;
+    color: var(--text-secondary);
 }
 
 .modal-body {
