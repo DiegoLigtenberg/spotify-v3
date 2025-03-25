@@ -3,6 +3,9 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
+    <meta name="apple-mobile-web-app-capable" content="yes">
+    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+    <meta name="theme-color" content="#121212">
     <title>Vibify</title>
     <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}">
     <link rel="stylesheet" href="{{ url_for('static', filename='css/auth.css') }}">
@@ -22,6 +25,16 @@
         // Add current origin (fixes mobile redirect issue)
         window.APP_ORIGIN = window.location.origin;
     </script>
+    
+    <!-- iOS style variables -->
+    <style>
+        :root {
+            --sat: env(safe-area-inset-top, 0px);
+            --sar: env(safe-area-inset-right, 0px);
+            --sab: env(safe-area-inset-bottom, 0px);
+            --sal: env(safe-area-inset-left, 0px);
+        }
+    </style>
     
     <!-- Handle auth redirects for mobile devices -->
     <script>

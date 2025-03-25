@@ -1770,89 +1770,170 @@ class MusicPlayer {
         }
     }
 
-    // Add a method to set up iOS-specific audio handling
+    // Enhanced iOS-specific audio handling for better playback experience
     _setupIOSAudioHandling() {
-        console.log('Setting up iOS Safari audio handling with seamless approach');
+        console.log('Setting up enhanced iOS Safari audio handling');
         
-        // Create a context unlock function that will be called on first user interaction
-        const unlockAudio = () => {
-            // Use a silent audio context approach
-            if (typeof AudioContext !== 'undefined' || typeof webkitAudioContext !== 'undefined') {
-                const AudioContextClass = window.AudioContext || window.webkitAudioContext;
-                const audioContext = new AudioContextClass();
-                
-                // Create a short silent buffer
-                const buffer = audioContext.createBuffer(1, 1, 22050);
-                const source = audioContext.createBufferSource();
-                source.buffer = buffer;
-                source.connect(audioContext.destination);
-                
-                // Play the buffer
-                if (typeof source.start === 'undefined') {
-                    source.noteOn(0);
-                } else {
-                    source.start(0);
-                }
-                
-                // Resume the audio context if needed
-                if (audioContext.state === 'suspended') {
-                    audioContext.resume();
-                }
-                
-                console.log('Audio context unlocked via user interaction');
-            }
+        // Force all audio elements to use consistent attributes
+        const setupAudioAttributes = () => {
+            if (!this.audio) return;
             
-            // Also create and play a silent HTML5 audio element
-            const silentAudio = document.createElement('audio');
-            silentAudio.controls = false;
-            silentAudio.preload = 'auto';
-            silentAudio.loop = false;
-            silentAudio.volume = 0.01; // Very low but not zero (zero can fail on iOS)
-            silentAudio.src = 'data:audio/mp3;base64,SUQzBAAAAAABEVRYWFgAAAAtAAADY29tbWVudABCaWdTb3VuZEJhbmsuY29tIC8gTGFTb25vdGhlcXVlLm9yZwBURU5DAAAAHQAAA1N3aXRjaCBQbHVzIMKpIE5DSCBTb2Z0d2FyZQBUSVQyAAAABgAAAzIyMzUAVFNTRQAAAA8AAANMYXZmNTcuODMuMTAwAAAAAAAAAAAAAAD/80DEAAAAA0gAAAAATEFNRTMuMTAwVVVVVVVVVVVVVUxBTUUzLjEwMFVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVf/zQsRbAAADSAAAAABVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVf/zQMSkAAADSAAAAABVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVV';
-            document.body.appendChild(silentAudio);
-            
-            // Attempt to play the silent audio
-            const playPromise = silentAudio.play();
-            if (playPromise !== undefined) {
-                playPromise.then(() => {
-                    console.log('Silent audio played successfully');
-                    // Wait a moment then remove the element
-                    setTimeout(() => {
-                        if (document.body.contains(silentAudio)) {
-                            document.body.removeChild(silentAudio);
-                        }
-                    }, 1000);
-                    
-                    // Also initialize our main audio player
-                    this.audio.load();
-                }).catch(error => {
-                    console.error('Silent audio play failed:', error);
-                    // Don't remove it - we'll try again on next interaction
-                });
-            }
-            
-            // Also modify the main audio element to be more iOS friendly
-            this.audio.preload = 'auto';  
+            this.audio.preload = 'auto';
             this.audio.autoplay = false; // Never autoplay on iOS
-            this.audio.load(); // Force load
+            
+            // Add playsInline attribute to enable proper playback
+            this.audio.setAttribute('playsinline', '');
+            this.audio.setAttribute('webkit-playsinline', '');
+            
+            // Set appropriate MIME type expectations
+            this.audio.setAttribute('type', 'audio/mpeg');
+            
+            console.log('Applied iOS-optimized audio attributes');
         };
         
-        // Listen for ANY user interaction to unlock audio
-        const events = ['touchstart', 'touchend', 'mousedown', 'keydown', 'click'];
+        // Run setup immediately
+        setupAudioAttributes();
+        
+        // Create a robust audio context unlock mechanism
+        const unlockAudioContext = () => {
+            // Create audio context if needed
+            if (!window.audioCtx) {
+                try {
+                    const AudioContext = window.AudioContext || window.webkitAudioContext;
+                    window.audioCtx = new AudioContext();
+                    console.log('Created iOS audio context:', window.audioCtx.state);
+                } catch (e) {
+                    console.error('Could not create AudioContext:', e);
+                }
+            }
+            
+            // Resume the audio context if it's suspended
+            if (window.audioCtx && window.audioCtx.state === 'suspended') {
+                window.audioCtx.resume()
+                    .then(() => console.log('Audio context resumed successfully'))
+                    .catch(e => console.error('Failed to resume audio context:', e));
+            }
+            
+            // Also play a silent audio to unlock audio capabilities
+            const playSilentSound = () => {
+                try {
+                    const silentSound = document.createElement('audio');
+                    silentSound.controls = false;
+                    silentSound.preload = 'auto';
+                    silentSound.volume = 0.01; // Very low volume
+                    silentSound.src = 'data:audio/mp3;base64,SUQzBAAAAAABEVRYWFgAAAAtAAADY29tbWVudABCaWdTb3VuZEJhbmsuY29tIC8gTGFTb25vdGhlcXVlLm9yZwBURU5DAAAAHQAAA1N3aXRjaCBQbHVzIMKpIE5DSCBTb2Z0d2FyZQBUSVQyAAAABgAAAzIyMzUAVFNTRQAAAA8AAANMYXZmNTcuODMuMTAwAAAAAAAAAAAAAAD/80DEAAAAA0gAAAAATEFNRTMuMTAwVVVVVVVVVVVVVUxBTUUzLjEwMFVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVf/zQsRbAAADSAAAAABVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVf/zQMSkAAADSAAAAABVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVV';
+                    document.body.appendChild(silentSound);
+                    
+                    silentSound.play()
+                        .then(() => {
+                            console.log('Silent sound played successfully');
+                            setTimeout(() => {
+                                if (document.body.contains(silentSound)) {
+                                    document.body.removeChild(silentSound);
+                                }
+                            }, 1000);
+                        })
+                        .catch(e => console.error('Silent sound failed to play:', e));
+                    
+                } catch (e) {
+                    console.error('Error playing silent sound:', e);
+                }
+            };
+            
+            playSilentSound();
+            
+            // Also try to "wake up" the main audio element
+            if (this.audio) {
+                this.audio.load();
+            }
+        };
+        
+        // Create enhanced play function for iOS
+        const enhancedPlay = async () => {
+            if (!this.audio) return false;
+            
+            try {
+                // Make sure audio context is unlocked
+                unlockAudioContext();
+                
+                // Apply critical attributes each time before playing
+                setupAudioAttributes();
+                
+                // Attempt to play with timeout and retry mechanism
+                let playAttempts = 0;
+                const maxAttempts = 3;
+                
+                const attemptPlay = async () => {
+                    playAttempts++;
+                    try {
+                        console.log(`iOS play attempt ${playAttempts}...`);
+                        await this.audio.play();
+                        console.log('iOS play successful!');
+                        return true;
+                    } catch (error) {
+                        console.error(`iOS play attempt ${playAttempts} failed:`, error);
+                        
+                        // Check if we should retry
+                        if (playAttempts < maxAttempts) {
+                            console.log(`Retrying play in 300ms... (attempt ${playAttempts + 1}/${maxAttempts})`);
+                            unlockAudioContext(); // Try to unlock again
+                            await new Promise(resolve => setTimeout(resolve, 300));
+                            return attemptPlay(); // Recursive retry
+                        } else {
+                            console.error('Max play attempts reached, showing notification to user');
+                            this.uiManager.showNotification(
+                                'Please tap the play button again to start audio playback',
+                                'info'
+                            );
+                            return false;
+                        }
+                    }
+                };
+                
+                return await attemptPlay();
+                
+            } catch (error) {
+                console.error('Enhanced iOS play error:', error);
+                return false;
+            }
+        };
+        
+        // Override the native play method for iOS
+        if (this.audio) {
+            this.originalPlay = this.audio.play;
+            this.audio.play = enhancedPlay.bind(this);
+        }
+        
+        // Handle various interaction events to unlock audio
+        const unlockEvents = ['touchstart', 'touchend', 'click', 'keydown'];
         const unlockOnce = () => {
-            unlockAudio();
-            // Remove all listeners after first interaction
-            events.forEach(event => {
+            unlockAudioContext();
+            unlockEvents.forEach(event => {
                 document.removeEventListener(event, unlockOnce);
             });
+            console.log('Audio unlocked through user interaction');
         };
         
-        // Add all event listeners
-        events.forEach(event => {
+        // Add listeners for unlocking audio
+        unlockEvents.forEach(event => {
             document.addEventListener(event, unlockOnce, { once: true });
         });
         
-        console.log('iOS audio handlers set up - waiting for user interaction');
+        // Also listen for orientation changes which can affect audio
+        window.addEventListener('orientationchange', () => {
+            console.log('Orientation changed, ensuring audio context is active');
+            setTimeout(unlockAudioContext, 500);
+        });
+        
+        // Handle visibility changes (app switching)
+        document.addEventListener('visibilitychange', () => {
+            if (document.visibilityState === 'visible') {
+                console.log('Tab became visible, ensuring audio context is active');
+                unlockAudioContext();
+            }
+        });
+        
+        console.log('Enhanced iOS audio handling setup complete');
     }
 }
 
