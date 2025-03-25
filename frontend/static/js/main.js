@@ -1861,6 +1861,10 @@ async function initApp() {
     try {
         console.log('Initializing application...');
         
+        // Set correct viewport height for iOS
+        setViewportHeight();
+        window.addEventListener('resize', setViewportHeight);
+        
         // Create and initialize the music player as early as possible
         if (!window.musicPlayer) {
             window.musicPlayer = new MusicPlayer();
@@ -1883,6 +1887,24 @@ async function initApp() {
     } catch (error) {
         console.error('Failed to initialize application:', error);
         alert('An error occurred during application initialization. Please refresh the page and try again.');
+    }
+}
+
+// Function to handle iOS viewport height calculation
+function setViewportHeight() {
+    // First get the viewport height
+    let vh = window.innerHeight * 0.01;
+    // Then set the value in the --vh custom property to the root of the document
+    document.documentElement.style.setProperty('--vh', `${vh}px`);
+    
+    // For iOS Safari, also account for safe areas
+    if (window.CSS && CSS.supports('-webkit-touch-callout', 'none')) {
+        console.log('Setting up iOS viewport adjustments');
+        // Add delay to ensure proper iOS rotation handling
+        setTimeout(() => {
+            vh = window.innerHeight * 0.01;
+            document.documentElement.style.setProperty('--vh', `${vh}px`);
+        }, 100);
     }
 }
 
