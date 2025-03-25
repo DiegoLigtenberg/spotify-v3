@@ -124,6 +124,20 @@ function detectIOSDevice() {
             setTimeout(setViewportHeight, 200);
         });
         
+        // Add event listener for when the page is shown (helps with iOS toolbar changes)
+        document.addEventListener('visibilitychange', () => {
+            if (document.visibilityState === 'visible') {
+                setTimeout(setViewportHeight, 300);
+            }
+        });
+        
+        // Apply iOS-specific meta tags
+        const metaViewport = document.querySelector('meta[name="viewport"]');
+        if (metaViewport) {
+            metaViewport.setAttribute('content', 
+                'width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover');
+        }
+        
         console.log('iOS device detected - applying iOS-specific styles');
     }
     return isIOS;
@@ -136,7 +150,14 @@ function setViewportHeight() {
     // Set viewport height CSS variable (to handle iOS Safari issues)
     const vh = window.innerHeight * 0.01;
     document.documentElement.style.setProperty('--vh', `${vh}px`);
-    console.log(`Viewport height set: ${window.innerHeight}px, 1vh = ${vh}px`);
+    
+    // Add iOS-specific padding to account for the bottom safe area
+    const safeAreaBottom = window.innerHeight - document.documentElement.clientHeight;
+    if (safeAreaBottom > 0) {
+        document.documentElement.style.setProperty('--sab', `${safeAreaBottom}px`);
+    }
+    
+    console.log(`Viewport height set: ${window.innerHeight}px, 1vh = ${vh}px, safe area bottom = ${safeAreaBottom}px`);
 }
 
 /**

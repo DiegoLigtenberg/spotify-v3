@@ -1266,11 +1266,14 @@ def debug_thumbnail():
 def get_top_tags_api():
     """Get the top tags for the frontend dropdown"""
     try:
+        # Get the limit parameter from the request, default to 15
+        limit = request.args.get('limit', default=15, type=int)
+        
         # Import the get_top_tags function here to avoid circular imports
         from get_top_tags import get_top_tags
         
-        # Get the top 10 tags
-        top_tags = get_top_tags()
+        # Get the top tags with the specified limit
+        top_tags = get_top_tags(limit)
         
         # Format the response
         formatted_tags = [{"name": tag_name, "count": count} for tag_name, count in top_tags]

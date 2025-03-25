@@ -12,9 +12,13 @@ supabase = create_client(
     os.getenv("SUPABASE_KEY")
 )
 
-def get_top_tags():
-    """Analyze tags and their usage across songs."""
-    print("Starting tag analysis...")
+def get_top_tags(limit=15):
+    """Analyze tags and their usage across songs.
+    
+    Args:
+        limit (int): Number of top tags to return (default: 15)
+    """
+    print(f"Starting tag analysis with limit {limit}...")
     
     # Get all songs with their titles
     songs_response = supabase.table('songs').select('id, title, artist').execute()
@@ -99,12 +103,12 @@ def get_top_tags():
             print(f"Artist: {song['artist']}")
             print(f"Tags: {', '.join(tags)}")
     
-    # Get and print top 10 most used tags
-    print("\nTop 10 most used tags:")
-    for tag_name, count in tag_counts.most_common(10):
+    # Get and print top tags based on limit
+    print(f"\nTop {limit} most used tags:")
+    for tag_name, count in tag_counts.most_common(limit):
         print(f"{tag_name}: {count} songs")
     
-    return tag_counts.most_common(10)
+    return tag_counts.most_common(limit)
 
 if __name__ == "__main__":
-    get_top_tags() 
+    get_top_tags(15) 

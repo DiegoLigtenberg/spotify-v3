@@ -1741,8 +1741,8 @@ class MusicPlayer {
             // Keep the first option (default)
             const defaultOption = tagSelect.options[0];
             
-            // Fetch top tags from API
-            const response = await fetch('/api/top-tags');
+            // Fetch top tags from API with limit=15 to get 15 tags
+            const response = await fetch('/api/top-tags?limit=15');
             if (!response.ok) {
                 throw new Error(`Failed to fetch top tags: ${response.status}`);
             }
