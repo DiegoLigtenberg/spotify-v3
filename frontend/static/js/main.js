@@ -447,6 +447,7 @@ class MusicPlayer {
         
         // Initialize audio player components and state
         this.audio = new Audio();
+        this.audio._eventListeners = {}; // Add storage for event listeners
         this.isLoading = false; // Add loading state flag
         this.currentAbortController = null; // For aborting fetch requests
         
@@ -492,29 +493,37 @@ class MusicPlayer {
 
     setupEventListeners() {
         // Set up audio event listeners for progress and time updates
-        this.audio.addEventListener('timeupdate', () => {
+        const trackEventListener = (event, listener) => {
+            if (!this.audio._eventListeners[event]) {
+                this.audio._eventListeners[event] = [];
+            }
+            this.audio._eventListeners[event].push(listener);
+            this.audio.addEventListener(event, listener);
+        };
+
+        trackEventListener('timeupdate', () => {
             if (!this.audio.duration) return;
             const currentTime = this.audio.currentTime;
             const duration = this.audio.duration;
             this.uiManager.updateProgress(currentTime, duration);
         });
 
-        this.audio.addEventListener('ended', () => {
+        trackEventListener('ended', () => {
             console.log('Song ended, playing next');
             this.playNext();
         });
 
-        this.audio.addEventListener('error', (e) => {
+        trackEventListener('error', (e) => {
             console.error('Audio error:', e);
             this.uiManager.showNotification('Error playing song', 'error');
             this.isLoading = false;
         });
 
-        this.audio.addEventListener('play', () => {
+        trackEventListener('play', () => {
             this.uiManager.updatePlayPauseButton(true);
         });
 
-        this.audio.addEventListener('pause', () => {
+        trackEventListener('pause', () => {
             this.uiManager.updatePlayPauseButton(false);
         });
 
@@ -952,73 +961,115 @@ class MusicPlayer {
             
             // Set src and load the new audio
             const songUrl = `/api/stream/${song.id}`;
-            this.audio.src = songUrl;
             
-            // Wait for audio to be loaded before playing
-            const loadPromise = new Promise((resolve, reject) => {
-                this.audio.oncanplaythrough = resolve;
-                this.audio.onerror = (e) => {
-                    console.error('Audio load error:', e);
-                    console.error('Audio element error code:', this.audio.error ? this.audio.error.code : 'unknown');
-                    reject(new Error(`Failed to load audio: ${song.id}`));
-                };
+            // For iOS Safari, we need to handle audio differently
+            if (this.isIOSSafari) {
+                console.log('Using iOS-optimized playback approach');
                 
-                // Set a timeout to prevent indefinite waiting
-                setTimeout(() => reject(new Error('Audio load timeout')), 10000);
-            });
-            
-            await loadPromise;
-            
-            // Play the song with special handling for iOS Safari
-            try {
-                // Try normal playback first
-                await this.audio.play();
-            } catch (playError) {
-                console.warn('Initial play attempt failed:', playError);
+                // Add a timestamp to avoid caching issues
+                this.audio.src = `${songUrl}?t=${Date.now()}`;
+                this.audio.preload = 'auto';
+                this.audio.load();
                 
-                // Special handling for iOS Safari
-                if (playError.name === 'NotAllowedError' || playError.name === 'AbortError') {
-                    console.log('Detected autoplay restriction, likely iOS Safari');
-                    
-                    // Create and show a play button that will trigger playback with user interaction
-                    const playButton = document.createElement('button');
-                    playButton.className = 'safari-play-button';
-                    playButton.innerHTML = '<i class="fas fa-play"></i> Tap to Play';
-                    playButton.style.position = 'fixed';
-                    playButton.style.top = '50%';
-                    playButton.style.left = '50%';
-                    playButton.style.transform = 'translate(-50%, -50%)';
-                    playButton.style.zIndex = '9999';
-                    playButton.style.padding = '15px 30px';
-                    playButton.style.backgroundColor = '#1DB954';
-                    playButton.style.color = 'white';
-                    playButton.style.border = 'none';
-                    playButton.style.borderRadius = '30px';
-                    playButton.style.fontSize = '16px';
-                    playButton.style.cursor = 'pointer';
-                    
-                    document.body.appendChild(playButton);
-                    
-                    // Wait for user to tap the button
-                    await new Promise(resolve => {
-                        playButton.addEventListener('click', async () => {
-                            try {
-                                // This should work now that we have user interaction
-                                await this.audio.play();
-                                document.body.removeChild(playButton);
-                                resolve();
-                            } catch (err) {
-                                console.error('Play still failed after user interaction:', err);
-                                this.uiManager.showNotification('Unable to play audio', 'error');
-                                document.body.removeChild(playButton);
-                                resolve(); // Still resolve to continue execution
+                // Create a timeout for loading
+                const loadTimeout = setTimeout(() => {
+                    console.warn('Audio loading timed out on iOS');
+                    this.uiManager.showNotification('Playback may be delayed. Please wait...', 'info');
+                }, 3000);
+                
+                try {
+                    // Wait for canplaythrough or error
+                    await new Promise((resolve, reject) => {
+                        // Set up event listeners for this specific load
+                        const canPlayHandler = () => {
+                            clearTimeout(loadTimeout);
+                            this.audio.removeEventListener('canplaythrough', canPlayHandler);
+                            this.audio.removeEventListener('error', errorHandler);
+                            resolve();
+                        };
+                        
+                        const errorHandler = (e) => {
+                            clearTimeout(loadTimeout);
+                            this.audio.removeEventListener('canplaythrough', canPlayHandler);
+                            this.audio.removeEventListener('error', errorHandler);
+                            reject(new Error(`iOS audio load error: ${e.message}`));
+                        };
+                        
+                        // Add event listeners
+                        this.audio.addEventListener('canplaythrough', canPlayHandler, { once: true });
+                        this.audio.addEventListener('error', errorHandler, { once: true });
+                        
+                        // For iOS, sometimes canplaythrough doesn't fire if the audio is too short
+                        // In that case, we'll just continue after a short delay
+                        setTimeout(() => {
+                            if (this.audio.readyState >= 2) { // HAVE_CURRENT_DATA or better
+                                canPlayHandler();
                             }
-                        });
+                        }, 1000);
                     });
-                } else {
-                    // For other errors, re-throw
-                    throw playError;
+                    
+                    // Try to play - this requires user interaction on iOS
+                    await this.audio.play();
+                    console.log('iOS audio playback started successfully');
+                } catch (playError) {
+                    console.warn('iOS playback start failed:', playError);
+                    
+                    // If there's a NotAllowedError, it means we need user interaction
+                    if (playError.name === 'NotAllowedError') {
+                        // Instead of showing a button, we'll try to play on the next user interaction
+                        const playOnNextInteraction = async (e) => {
+                            e.preventDefault(); // Prevent default click behavior
+                            
+                            try {
+                                await this.audio.play();
+                                console.log('Audio started on user interaction');
+                                this.uiManager.updatePlayPauseButton(true);
+                                
+                                // Remove all interaction listeners
+                                ['click', 'touchstart', 'touchend'].forEach(eventType => {
+                                    document.removeEventListener(eventType, playOnNextInteraction);
+                                });
+                            } catch (err) {
+                                console.error('Still failed to play on user interaction:', err);
+                                // Try one more time with a fresh audio element
+                                this._recreateAudioElement();
+                                this.uiManager.showNotification('Playback delayed. Try tapping play button again.', 'info');
+                            }
+                        };
+                        
+                        // Listen for user interaction
+                        ['click', 'touchstart', 'touchend'].forEach(eventType => {
+                            document.addEventListener(eventType, playOnNextInteraction, { once: true });
+                        });
+                        
+                        // Show a notification to let the user know they need to interact
+                        this.uiManager.showNotification('Tap anywhere to start audio playback', 'info');
+                    } else {
+                        // For other errors, try the normal approach
+                        throw playError;
+                    }
                 }
+            } else {
+                // Non-iOS approach (simpler)
+                this.audio.src = songUrl;
+                
+                // Wait for audio to be loaded before playing
+                const loadPromise = new Promise((resolve, reject) => {
+                    this.audio.oncanplaythrough = resolve;
+                    this.audio.onerror = (e) => {
+                        console.error('Audio load error:', e);
+                        console.error('Audio element error code:', this.audio.error ? this.audio.error.code : 'unknown');
+                        reject(new Error(`Failed to load audio: ${song.id}`));
+                    };
+                    
+                    // Set a timeout to prevent indefinite waiting
+                    setTimeout(() => reject(new Error('Audio load timeout')), 10000);
+                });
+                
+                await loadPromise;
+                
+                // Try to play the audio
+                await this.audio.play();
             }
             
             this.uiManager.updatePlayPauseButton(true);
@@ -1040,10 +1091,43 @@ class MusicPlayer {
             }
         } catch (error) {
             console.error('Error playing song:', error);
-            this.uiManager.showNotification(`Failed to play: ${error.message}`, 'error');
+            this.uiManager.showNotification(`Playback issue: ${error.message}`, 'error');
         } finally {
             this.isLoading = false;
         }
+    }
+    
+    // Helper method to recreate audio element when needed (for stubborn iOS cases)
+    _recreateAudioElement() {
+        const oldAudio = this.audio;
+        const volume = oldAudio.volume;
+        const currentTime = oldAudio.currentTime;
+        const src = oldAudio.src;
+        
+        // Create new audio element
+        this.audio = new Audio();
+        this.audio.volume = volume;
+        this.audio.preload = 'auto';
+        
+        // Reattach all event listeners from the old audio element
+        const events = ['timeupdate', 'ended', 'error', 'play', 'pause'];
+        events.forEach(event => {
+            const listeners = oldAudio._eventListeners?.[event] || [];
+            listeners.forEach(listener => {
+                this.audio.addEventListener(event, listener);
+            });
+        });
+        
+        // Set the source and try to maintain playback state
+        if (src) {
+            this.audio.src = src;
+            this.audio.load();
+            if (currentTime > 0) {
+                this.audio.currentTime = currentTime;
+            }
+        }
+        
+        console.log('Audio element recreated for better iOS compatibility');
     }
 
     // New method to update active song in the list without redrawing everything
@@ -1070,50 +1154,57 @@ class MusicPlayer {
         }
         
         if (this.audio.paused) {
-            this.audio.play()
-                .then(() => this.uiManager.updatePlayPauseButton(true))
-                .catch(err => {
-                    console.error('Error playing audio:', err);
+            // Special case for iOS Safari
+            if (this.isIOSSafari) {
+                console.log('iOS-optimized play/pause handling');
+                
+                try {
+                    // For iOS Safari, we need to make sure the audio is properly loaded
+                    if (!this.audio.src || this.audio.src === '') {
+                        // No source, so nothing to play
+                        console.warn('No audio source set, cannot play');
+                        this.uiManager.showNotification('Please select a song first', 'info');
+                        return;
+                    }
                     
-                    // Special handling for iOS Safari
-                    if (err.name === 'NotAllowedError' || err.name === 'AbortError') {
-                        console.log('Detected autoplay restriction in handlePlayPause, likely iOS Safari');
-                        
-                        // Create and show a play button that will trigger playback with user interaction
-                        const playButton = document.createElement('button');
-                        playButton.className = 'safari-play-button';
-                        playButton.innerHTML = '<i class="fas fa-play"></i> Tap to Play';
-                        playButton.style.position = 'fixed';
-                        playButton.style.top = '50%';
-                        playButton.style.left = '50%';
-                        playButton.style.transform = 'translate(-50%, -50%)';
-                        playButton.style.zIndex = '9999';
-                        playButton.style.padding = '15px 30px';
-                        playButton.style.backgroundColor = '#1DB954';
-                        playButton.style.color = 'white';
-                        playButton.style.border = 'none';
-                        playButton.style.borderRadius = '30px';
-                        playButton.style.fontSize = '16px';
-                        playButton.style.cursor = 'pointer';
-                        
-                        document.body.appendChild(playButton);
-                        
-                        // Add click event to play on user interaction
-                        playButton.addEventListener('click', async () => {
-                            try {
-                                // This should work now that we have user interaction
-                                await this.audio.play();
-                                this.uiManager.updatePlayPauseButton(true);
-                                document.body.removeChild(playButton);
-                            } catch (innerErr) {
-                                console.error('Play still failed after user interaction:', innerErr);
-                                this.uiManager.showNotification('Unable to play audio', 'error');
-                                document.body.removeChild(playButton);
+                    // Update UI immediately to provide feedback
+                    this.uiManager.updatePlayPauseButton(true);
+                    
+                    // Try to play directly
+                    this.audio.play()
+                        .then(() => {
+                            console.log('iOS playback started successfully');
+                        })
+                        .catch(err => {
+                            console.error('iOS play error:', err);
+                            
+                            // If playback is not allowed, try reloading the audio
+                            if (err.name === 'NotAllowedError' || err.name === 'AbortError') {
+                                // Just show a notification - no button needed
+                                this.uiManager.showNotification('Tap the play button again to start audio', 'info');
+                                
+                                // Update UI to reflect paused state
+                                this.uiManager.updatePlayPauseButton(false);
+                                
+                                // Force reload audio to make it work on next attempt
+                                this.audio.load();
                             }
                         });
-                    }
-                });
+                } catch (e) {
+                    console.error('Unexpected error during iOS play:', e);
+                }
+            } else {
+                // Non-iOS browsers
+                this.audio.play()
+                    .then(() => this.uiManager.updatePlayPauseButton(true))
+                    .catch(err => {
+                        console.error('Error playing audio:', err);
+                        this.uiManager.showNotification('Playback failed, please try again', 'error');
+                        this.uiManager.updatePlayPauseButton(false);
+                    });
+            }
         } else {
+            // Pause behavior is the same for all browsers
             this.audio.pause();
             this.uiManager.updatePlayPauseButton(false);
         }
@@ -1681,83 +1772,87 @@ class MusicPlayer {
 
     // Add a method to set up iOS-specific audio handling
     _setupIOSAudioHandling() {
-        console.log('Setting up iOS Safari audio handling');
+        console.log('Setting up iOS Safari audio handling with seamless approach');
         
-        // Create a button to inform the user about audio restrictions
-        const unlockButton = document.createElement('button');
-        unlockButton.className = 'ios-audio-unlock-button';
-        unlockButton.innerHTML = '<i class="fas fa-music"></i> Tap to Enable Audio';
-        unlockButton.style.position = 'fixed';
-        unlockButton.style.top = '50%';
-        unlockButton.style.left = '50%';
-        unlockButton.style.transform = 'translate(-50%, -50%)';
-        unlockButton.style.zIndex = '9999';
-        unlockButton.style.padding = '15px 30px';
-        unlockButton.style.backgroundColor = '#1DB954';
-        unlockButton.style.color = 'white';
-        unlockButton.style.border = 'none';
-        unlockButton.style.borderRadius = '30px';
-        unlockButton.style.fontSize = '16px';
-        unlockButton.style.cursor = 'pointer';
-        unlockButton.style.boxShadow = '0 4px 12px rgba(0, 0, 0, 0.3)';
-        
-        // Create a silent audio element to unlock audio playback
-        const silentAudio = new Audio();
-        silentAudio.src = 'data:audio/mp3;base64,SUQzBAAAAAAAI1RTU0UAAAAPAAADTGF2ZjU4LjI5LjEwMAAAAAAAAAAAAAAA//tQAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAWGluZwAAAA8AAAACAAABIgD///////////////////////////////////////////8AAAA8TEFNRTMuMTAwAQAAAAAAAAAAABSAJAJAQgAAgAAAAiSBzikA////////////';
-        silentAudio.loop = false;
-        silentAudio.volume = 0.001; // Nearly silent
-        
-        // Add the button to the page
-        document.body.appendChild(unlockButton);
-        
-        // Listen for the first user interaction and then try to play audio
-        unlockButton.addEventListener('click', async () => {
-            try {
-                // Try to play the silent audio
-                await silentAudio.play();
-                console.log('Audio context unlocked on iOS');
+        // Create a context unlock function that will be called on first user interaction
+        const unlockAudio = () => {
+            // Use a silent audio context approach
+            if (typeof AudioContext !== 'undefined' || typeof webkitAudioContext !== 'undefined') {
+                const AudioContextClass = window.AudioContext || window.webkitAudioContext;
+                const audioContext = new AudioContextClass();
                 
-                // Also load the actual audio player to unlock it
-                this.audio.load();
+                // Create a short silent buffer
+                const buffer = audioContext.createBuffer(1, 1, 22050);
+                const source = audioContext.createBufferSource();
+                source.buffer = buffer;
+                source.connect(audioContext.destination);
                 
-                // Remove the button
-                document.body.removeChild(unlockButton);
-                
-                // Show success message
-                this.uiManager.showNotification('Audio enabled successfully!', 'success');
-            } catch (error) {
-                console.error('Failed to unlock audio on iOS:', error);
-                this.uiManager.showNotification('Failed to enable audio. Please try again.', 'error');
-            }
-        });
-        
-        // Also listen for any user interaction to unlock audio
-        const unlockOnInteraction = async () => {
-            try {
-                // Only proceed if the button is still in the DOM
-                if (document.body.contains(unlockButton)) {
-                    await silentAudio.play();
-                    console.log('Audio context unlocked via page interaction');
-                    this.audio.load();
-                    
-                    // Remove the button
-                    if (document.body.contains(unlockButton)) {
-                        document.body.removeChild(unlockButton);
-                    }
-                    
-                    // Remove the event listeners
-                    document.removeEventListener('touchstart', unlockOnInteraction);
-                    document.removeEventListener('click', unlockOnInteraction);
+                // Play the buffer
+                if (typeof source.start === 'undefined') {
+                    source.noteOn(0);
+                } else {
+                    source.start(0);
                 }
-            } catch (error) {
-                console.error('Error unlocking audio on interaction:', error);
-                // Keep the button for explicit interaction
+                
+                // Resume the audio context if needed
+                if (audioContext.state === 'suspended') {
+                    audioContext.resume();
+                }
+                
+                console.log('Audio context unlocked via user interaction');
             }
+            
+            // Also create and play a silent HTML5 audio element
+            const silentAudio = document.createElement('audio');
+            silentAudio.controls = false;
+            silentAudio.preload = 'auto';
+            silentAudio.loop = false;
+            silentAudio.volume = 0.01; // Very low but not zero (zero can fail on iOS)
+            silentAudio.src = 'data:audio/mp3;base64,SUQzBAAAAAABEVRYWFgAAAAtAAADY29tbWVudABCaWdTb3VuZEJhbmsuY29tIC8gTGFTb25vdGhlcXVlLm9yZwBURU5DAAAAHQAAA1N3aXRjaCBQbHVzIMKpIE5DSCBTb2Z0d2FyZQBUSVQyAAAABgAAAzIyMzUAVFNTRQAAAA8AAANMYXZmNTcuODMuMTAwAAAAAAAAAAAAAAD/80DEAAAAA0gAAAAATEFNRTMuMTAwVVVVVVVVVVVVVUxBTUUzLjEwMFVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVf/zQsRbAAADSAAAAABVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVf/zQMSkAAADSAAAAABVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVV';
+            document.body.appendChild(silentAudio);
+            
+            // Attempt to play the silent audio
+            const playPromise = silentAudio.play();
+            if (playPromise !== undefined) {
+                playPromise.then(() => {
+                    console.log('Silent audio played successfully');
+                    // Wait a moment then remove the element
+                    setTimeout(() => {
+                        if (document.body.contains(silentAudio)) {
+                            document.body.removeChild(silentAudio);
+                        }
+                    }, 1000);
+                    
+                    // Also initialize our main audio player
+                    this.audio.load();
+                }).catch(error => {
+                    console.error('Silent audio play failed:', error);
+                    // Don't remove it - we'll try again on next interaction
+                });
+            }
+            
+            // Also modify the main audio element to be more iOS friendly
+            this.audio.preload = 'auto';  
+            this.audio.autoplay = false; // Never autoplay on iOS
+            this.audio.load(); // Force load
         };
         
-        // Add event listeners for user interaction
-        document.addEventListener('touchstart', unlockOnInteraction, { once: true });
-        document.addEventListener('click', unlockOnInteraction, { once: true });
+        // Listen for ANY user interaction to unlock audio
+        const events = ['touchstart', 'touchend', 'mousedown', 'keydown', 'click'];
+        const unlockOnce = () => {
+            unlockAudio();
+            // Remove all listeners after first interaction
+            events.forEach(event => {
+                document.removeEventListener(event, unlockOnce);
+            });
+        };
+        
+        // Add all event listeners
+        events.forEach(event => {
+            document.addEventListener(event, unlockOnce, { once: true });
+        });
+        
+        console.log('iOS audio handlers set up - waiting for user interaction');
     }
 }
 
