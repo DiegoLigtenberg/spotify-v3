@@ -1,65 +1,150 @@
 class SongListManager {
     constructor(container, options = {}) {
-        this.container = container;
+        // Get the container
+        this.container = typeof container === 'string' 
+            ? document.querySelector(container) 
+            : container;
+        
+        if (!this.container) {
+            console.error('SongListManager: No container element found');
+            return;
+        }
+        
+        // Default configuration
+        this.config = {
+            batchSize: options.batchSize || 20,
+            scrollThreshold: options.scrollThreshold || 300,
+            bufferSize: options.bufferSize || 100
+        };
+        
+        // State
         this.songs = [];
+        this.songIdSet = new Set();
         this.currentOffset = 0;
         this.hasMoreSongs = true;
         this.isLoading = false;
+        this.randomMode = false;
         this.totalSongsCount = 0;
-        this.songIdSet = new Set();
-        this.randomMode = options.randomMode || false;
-        this.currentTag = '';
-        
-        // Configuration
-        this.config = {
-            // Keep more songs in memory for smoother scrolling
-            bufferSize: options.bufferSize || 100,
-            // Load more songs at once to reduce loading frequency
-            batchSize: options.batchSize || 30,
-            // Start loading more songs when we're 30% from the bottom
-            scrollThreshold: options.scrollThreshold || 0.3,
-            // Debounce scroll events
-            scrollCooldown: options.scrollCooldown || 100
-        };
-
-        this.lastScrollTop = 0;
-        this.scrollTimeout = null;
+        this.currentTag = null;
         this.scrollDirection = 'down';
-        this.isScrolling = false;
         this.lastScrollHeight = 0;
         
-        // Initialize scroll handler
+        // Detect iOS for special handling
+        this.isIOS = /iPad|iPhone|iPod/.test(navigator.userAgent) && !window.MSStream;
+        
+        // Initial render
+        this._renderSongs();
+        
+        // Set up scroll handler
         this._initScrollHandler();
+        
+        console.log('SongListManager initialized', this.isIOS ? 'for iOS' : 'for standard browser');
     }
 
     _initScrollHandler() {
-        this.container.addEventListener('scroll', () => {
-            if (this.scrollTimeout) {
-                clearTimeout(this.scrollTimeout);
-            }
-            
-            this.scrollTimeout = setTimeout(() => {
-                this._handleScroll();
-                this.scrollTimeout = null;
-            }, this.config.scrollCooldown);
-        }, { passive: true });
+        // Determine the correct scroll container
+        const scrollContainer = this._getScrollContainer();
+        
+        if (scrollContainer) {
+            scrollContainer.addEventListener('scroll', this._handleScroll.bind(this), { passive: true });
+            console.log(`Scroll listener attached to ${scrollContainer.tagName}.${scrollContainer.className}`);
+        } else {
+            console.error('Could not find a valid scroll container');
+        }
+        
+        // Use IntersectionObserver for more reliable infinite scrolling, especially on iOS
+        this._setupInfiniteScrollObserver();
     }
 
-    _handleScroll() {
-        if (this.isLoading) return;
-
-        const scrollTop = this.container.scrollTop;
-        const scrollHeight = this.container.scrollHeight;
-        const clientHeight = this.container.clientHeight;
+    _getScrollContainer() {
+        // For iOS, use the active view container or home view
+        if (this.isIOS) {
+            return document.querySelector('.view-container.active') || 
+                   document.getElementById('home-view');
+        }
         
-        this.scrollDirection = scrollTop > this.lastScrollTop ? 'down' : 'up';
+        // For other browsers, use the original container
+        return this.container;
+    }
+
+    _setupInfiniteScrollObserver() {
+        try {
+            // Create or locate a sentinel element for infinite scrolling
+            let sentinel = document.getElementById('infinite-scroll-sentinel');
+            if (!sentinel) {
+                sentinel = document.createElement('div');
+                sentinel.id = 'infinite-scroll-sentinel';
+                sentinel.className = 'infinite-scroll-sentinel';
+                sentinel.style.height = '50px';
+                sentinel.style.width = '100%';
+                sentinel.style.marginTop = '20px';
+                
+                // Insert the sentinel at the end of the container or at the end of the active view
+                const targetContainer = this.isIOS ? 
+                    (document.querySelector('.songs-container')) : 
+                    this.container;
+                    
+                if (targetContainer) {
+                    targetContainer.appendChild(sentinel);
+                    console.log('Created infinite scroll sentinel');
+                }
+            }
+            
+            if (sentinel) {
+                // Create an observer instance
+                const scrollRoot = this._getScrollContainer();
+                
+                const observer = new IntersectionObserver((entries) => {
+                    entries.forEach(entry => {
+                        // When sentinel is visible
+                        if (entry.isIntersecting && !this.isLoading && this.hasMoreSongs) {
+                            console.log('Sentinel visible, loading more songs');
+                            this._loadMoreSongs('down');
+                        }
+                    });
+                }, {
+                    root: this.isIOS ? scrollRoot : null,
+                    rootMargin: '200px',
+                    threshold: 0.1
+                });
+                
+                // Start observing the sentinel
+                observer.observe(sentinel);
+                console.log('IntersectionObserver started for infinite scrolling');
+            }
+        } catch (error) {
+            console.error('Error setting up infinite scroll observer:', error);
+        }
+    }
+
+    _handleScroll(event) {
+        // Get the real scrolling element
+        const scrollContainer = this._getScrollContainer();
+        if (!scrollContainer) return;
+        
+        // Get scroll info
+        const scrollTop = scrollContainer.scrollTop;
+        const scrollHeight = scrollContainer.scrollHeight;
+        const clientHeight = scrollContainer.clientHeight;
+        
+        // Determine scroll direction
+        if (this.lastScrollTop !== undefined) {
+            this.scrollDirection = scrollTop > this.lastScrollTop ? 'down' : 'up';
+        }
         this.lastScrollTop = scrollTop;
         
-        // Calculate how far we've scrolled from the bottom
-        const scrolledFromBottom = 1 - ((scrollTop + clientHeight) / scrollHeight);
+        // Check if near the bottom
+        const scrolledFromBottom = scrollHeight - scrollTop - clientHeight;
+        
+        // Debug log for iOS
+        if (this.isIOS && scrolledFromBottom < 500) {
+            console.log(`iOS Scroll: ${scrolledFromBottom}px from bottom, threshold: ${this.config.scrollThreshold}px`);
+        }
         
         // Load more songs when we're near the bottom
-        if (scrolledFromBottom < this.config.scrollThreshold && this.hasMoreSongs) {
+        // Note: This is a backup for the IntersectionObserver, but we still keep it for browsers without IO support
+        if (scrolledFromBottom < this.config.scrollThreshold && this.hasMoreSongs && !this.isLoading) {
+            console.log('Scroll threshold reached, loading more songs');
             this._loadMoreSongs('down');
         }
     }
@@ -68,11 +153,13 @@ class SongListManager {
         if (this.isLoading || (direction === 'down' && !this.hasMoreSongs)) return;
         
         this.isLoading = true;
+        console.log(`Loading more songs (${direction}), current count: ${this.songs.length}`);
         
         try {
             // Store current scroll position and height
-            const scrollTop = this.container.scrollTop;
-            this.lastScrollHeight = this.container.scrollHeight;
+            const scrollContainer = this._getScrollContainer();
+            const scrollTop = scrollContainer ? scrollContainer.scrollTop : 0;
+            this.lastScrollHeight = scrollContainer ? scrollContainer.scrollHeight : 0;
             
             // Calculate the offset for the next batch
             const fetchOffset = direction === 'down' 
@@ -87,6 +174,7 @@ class SongListManager {
                 url += `&tag=${encodeURIComponent(this.currentTag)}`;
             }
             
+            console.log(`Fetching songs: ${url}`);
             const response = await fetch(url);
             
             if (!response.ok) throw new Error(`HTTP error! status: ${response.status}`);
@@ -94,6 +182,8 @@ class SongListManager {
             const data = await response.json();
             this.totalSongsCount = data.total;
             this.hasMoreSongs = data.has_more;
+            
+            console.log(`Fetched ${data.songs.length} songs, more available: ${data.has_more}`);
             
             if (data.songs.length === 0) {
                 if (direction === 'down') this.hasMoreSongs = false;
@@ -107,9 +197,22 @@ class SongListManager {
             this._renderSongs();
             
             // Wait for the DOM to update
-            requestAnimationFrame(() => {
-                this._maintainScrollPosition(scrollTop);
-            });
+            if (scrollContainer) {
+                requestAnimationFrame(() => {
+                    if (this.isIOS) {
+                        // For iOS, use a more reliable approach with multiple attempts
+                        const restoreScroll = () => {
+                            this._maintainScrollPosition(scrollTop);
+                        };
+                        
+                        restoreScroll();
+                        setTimeout(restoreScroll, 50);
+                        setTimeout(restoreScroll, 150);
+                    } else {
+                        this._maintainScrollPosition(scrollTop);
+                    }
+                });
+            }
         } catch (error) {
             console.error('Error loading songs:', error);
         } finally {
@@ -158,17 +261,22 @@ class SongListManager {
     }
     
     _maintainScrollPosition(oldScrollTop) {
+        // Get the correct scrolling container for this platform
+        const scrollContainer = this._getScrollContainer();
+        if (!scrollContainer) return;
+        
         // Calculate the new scroll position based on the height difference
-        const newScrollHeight = this.container.scrollHeight;
+        const newScrollHeight = scrollContainer.scrollHeight;
         const heightDiff = newScrollHeight - this.lastScrollHeight;
         
         // If we're loading more songs at the bottom, maintain the same distance from the bottom
         if (this.scrollDirection === 'down') {
             const distanceFromBottom = this.lastScrollHeight - oldScrollTop;
-            this.container.scrollTop = newScrollHeight - distanceFromBottom;
+            scrollContainer.scrollTop = newScrollHeight - distanceFromBottom;
+            console.log(`Maintaining scroll position: new top=${scrollContainer.scrollTop}, height diff=${heightDiff}`);
         } else {
             // If scrolling up, maintain the same scroll position
-            this.container.scrollTop = oldScrollTop + heightDiff;
+            scrollContainer.scrollTop = oldScrollTop + heightDiff;
         }
         
         // Update the last scroll height

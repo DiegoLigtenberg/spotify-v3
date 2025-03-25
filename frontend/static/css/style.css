@@ -2780,4 +2780,52 @@ nav ul li a.active {
     overflow: visible !important;
     position: relative !important;
     padding-bottom: 140px !important;
+}
+
+/* Infinite scroll sentinel styling */
+.infinite-scroll-sentinel {
+    height: 50px;
+    width: 100%;
+    margin-top: 20px;
+    margin-bottom: 100px;
+    position: relative;
+    opacity: 0.01; 
+    pointer-events: none;
+}
+
+/* iOS-specific scroll improvements */
+.ios-device .infinite-scroll-sentinel {
+    margin-bottom: 200px; /* Extra margin for iOS devices */
+}
+
+/* Make sure scroll containers work properly on iOS */
+.ios-device .view-container, 
+.ios-device #home-view {
+    height: auto;
+    min-height: 100%;
+    -webkit-overflow-scrolling: touch !important;
+    overflow-y: auto !important;
+    padding-bottom: 170px !important; /* Ensure enough space at bottom */
+    position: relative !important;
+}
+
+/* Fix specific scroll issues in iOS Safari */
+.ios-device .songs-container {
+    overflow: visible !important;
+    height: auto !important;
+    min-height: 100%;
+    position: relative !important;
+    z-index: 5;
+}
+
+/* Force the player to stay visible */
+.ios-device .player.ios-fixed {
+    position: fixed !important;
+    bottom: 0 !important;
+    left: 0 !important;
+    right: 0 !important;
+    z-index: 1000 !important;
+    background-color: #181818 !important;
+    box-shadow: 0 -2px 10px rgba(0, 0, 0, 0.4) !important;
+    display: flex !important;
 } 

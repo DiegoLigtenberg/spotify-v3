@@ -872,49 +872,146 @@ class MusicPlayer {
         if (songs.length > batchSize) {
             const sentinel = document.createElement('div');
             sentinel.className = 'infinite-scroll-sentinel';
+            sentinel.style.height = '20px';
+            sentinel.style.width = '100%';
+            sentinel.setAttribute('id', 'infinite-scroll-sentinel');
             container.appendChild(sentinel);
+            
+            // Log for debugging
+            console.log('Created infinite scroll sentinel, watching for intersection');
 
-            const observer = new IntersectionObserver((entries) => {
-                entries.forEach(entry => {
-                    if (entry.isIntersecting) {
-                        const currentCount = container.children.length - 1; // -1 for sentinel
+            // Detect iOS for special handling
+            const isIOS = /iPad|iPhone|iPod/.test(navigator.userAgent) && !window.MSStream;
+            
+            // For iOS, we need to find the correct scrolling parent
+            const scrollParent = isIOS ? 
+                (document.querySelector('.view-container.active') || document.getElementById('home-view')) : 
+                container.parentElement;
+                
+            console.log('Using scroll parent for IntersectionObserver:', scrollParent?.tagName, scrollParent?.className);
+
+            // Create and configure the IntersectionObserver
+            try {
+                const observer = new IntersectionObserver((entries) => {
+                    entries.forEach(entry => {
+                        if (entry.isIntersecting) {
+                            console.log('Sentinel is visible, loading more songs');
+                            const currentCount = container.querySelectorAll('.song-card').length;
+                            
+                            if (currentCount < songs.length) {
+                                console.log(`Loading more songs: ${currentCount} of ${songs.length}`);
+                                renderBatch(currentCount, Math.min(currentCount + batchSize, songs.length));
+                                
+                                // If we've rendered all songs, disconnect the observer
+                                if (currentCount + batchSize >= songs.length) {
+                                    console.log('All songs rendered, removing sentinel');
+                                    observer.disconnect();
+                                    sentinel.remove();
+                                }
+                            } else {
+                                // No more songs to load, disconnect
+                                console.log('No more songs to load, removing sentinel');
+                                observer.disconnect();
+                                sentinel.remove();
+                            }
+                        }
+                    });
+                }, {
+                    root: isIOS ? scrollParent : null, // Use the scroll parent as root on iOS
+                    rootMargin: '200px',
+                    threshold: 0.1
+                });
+                
+                // Start observing
+                observer.observe(sentinel);
+                console.log('IntersectionObserver started');
+            } catch (error) {
+                console.error('Error setting up IntersectionObserver:', error);
+                
+                // Fallback for older browsers or if IntersectionObserver fails
+                console.log('Using scroll event fallback for infinite scrolling');
+                const handleScroll = () => {
+                    const scrollElement = isIOS ? scrollParent : container.parentElement;
+                    if (!scrollElement) return;
+                    
+                    const scrollPosition = scrollElement.scrollTop + scrollElement.clientHeight;
+                    const scrollHeight = scrollElement.scrollHeight;
+                    
+                    // Load more when scrolled to 90% of the height
+                    if (scrollPosition > scrollHeight * 0.9) {
+                        const currentCount = container.querySelectorAll('.song-card').length;
                         if (currentCount < songs.length) {
+                            console.log(`Loading more songs via scroll: ${currentCount} of ${songs.length}`);
                             renderBatch(currentCount, Math.min(currentCount + batchSize, songs.length));
+                            
+                            // If we've rendered all songs, remove the event listener
+                            if (currentCount + batchSize >= songs.length) {
+                                scrollElement.removeEventListener('scroll', handleScroll);
+                            }
                         }
                     }
-                });
-            }, {
-                root: container,
-                rootMargin: '100px'
-            });
-
-            observer.observe(sentinel);
+                };
+                
+                const scrollElement = isIOS ? scrollParent : container.parentElement;
+                if (scrollElement) {
+                    scrollElement.addEventListener('scroll', handleScroll, { passive: true });
+                }
+            }
         }
 
         // Set up lazy loading for images
-        const lazyLoadImages = () => {
+        this._setupLazyLoading(container);
+    }
+
+    /**
+     * Set up lazy loading for images in a container
+     * @param {Element} container - The container with images to lazy load
+     * @private
+     */
+    _setupLazyLoading(container) {
+        if (!container) return;
+        
+        try {
             const imageObserver = new IntersectionObserver((entries) => {
                 entries.forEach(entry => {
                     if (entry.isIntersecting) {
                         const img = entry.target;
                         const src = img.getAttribute('data-src');
                         if (src) {
+                            console.log(`Lazy loading image: ${src}`);
                             img.src = src;
                             img.removeAttribute('data-src');
+                            img.classList.add('loaded');
+                            imageObserver.unobserve(img);
                         }
                     }
                 });
             }, {
-                rootMargin: '50px'
+                rootMargin: '100px',
+                threshold: 0.1
             });
 
-            container.querySelectorAll('.lazy-thumbnail').forEach(img => {
-                imageObserver.observe(img);
+            // Queue up all lazy images for observation
+            setTimeout(() => {
+                const lazyImages = container.querySelectorAll('.lazy-thumbnail');
+                lazyImages.forEach(img => {
+                    imageObserver.observe(img);
+                });
+                console.log(`Set up lazy loading for ${lazyImages.length} images`);
+            }, 100);
+        } catch (error) {
+            console.error('Error setting up image lazy loading:', error);
+            
+            // Fallback for browsers without IntersectionObserver
+            const lazyImages = container.querySelectorAll('.lazy-thumbnail');
+            lazyImages.forEach(img => {
+                const src = img.getAttribute('data-src');
+                if (src) {
+                    img.src = src;
+                    img.classList.add('loaded');
+                }
             });
-        };
-
-        // Initialize lazy loading after a short delay
-        setTimeout(lazyLoadImages, 100);
+        }
     }
 
     /**
