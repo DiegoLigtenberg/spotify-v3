@@ -1442,7 +1442,6 @@ nav ul li a.active {
 }
 
 .song-duration {
-    width: 80px;
     text-align: right;
     color: #aaa;
     font-size: 14px;
@@ -2577,8 +2576,7 @@ nav ul li a.active {
 @media (max-width: 768px) {
     .ios-device .main-content-header {
         left: 0;
-        top: 0;
-        padding-top: max(20px, env(safe-area-inset-top));
+        padding-top: calc(16px + env(safe-area-inset-top));
     }
     
     .ios-device .main-content {
@@ -2588,4 +2586,198 @@ nav ul li a.active {
     .ios-device .sidebar {
         display: none;
     }
+}
+
+/* Fix iOS scrolling issues */
+.ios-device .songs-container {
+    overflow-y: auto !important;
+    -webkit-overflow-scrolling: touch !important; 
+    position: relative;
+    height: auto;
+    padding-bottom: 100px; /* Space for player at bottom */
+    max-height: none !important; /* Remove max-height constraints */
+}
+
+/* Ensure the song cards are properly clickable */
+.ios-device .song-card {
+    touch-action: manipulation; /* Optimize for touch */
+    cursor: pointer;
+    position: relative;
+    z-index: 5;
+}
+
+/* Fix the container layout for iOS */
+.ios-device .container {
+    /* Use the viewport height CSS variable */
+    height: calc(var(--vh, 1vh) * 100);
+    display: flex;
+    flex-direction: column;
+    /* Remove fixed positioning that breaks scrolling */
+    position: absolute;
+    top: 0;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    overflow: hidden;
+}
+
+.ios-device .main-content {
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    padding-top: 80px; /* Room for fixed header */
+    padding-bottom: calc(90px + var(--sab, 0px)); /* Room for fixed player */
+    overflow: hidden;
+    position: relative;
+}
+
+.ios-device .view-container {
+    flex: 1;
+    overflow-y: auto;
+    -webkit-overflow-scrolling: touch;
+    position: relative;
+}
+
+/* Fixed player styles that won't interfere with scrolling */
+.ios-device .player {
+    position: fixed !important;
+    bottom: 0 !important;
+    left: 0 !important;
+    right: 0 !important;
+    z-index: 1000 !important;
+    padding-bottom: calc(var(--sab, 0px) + 8px) !important;
+    background-color: #181818;
+    height: auto !important;
+    transform: translateZ(0);
+    display: flex !important;
+    flex-direction: column;
+    min-height: 90px;
+}
+
+/* Ensure song card click target is large enough */
+.ios-device .song-card img {
+    pointer-events: none; /* Make sure clicks go to the card */
+}
+
+/* Fix tap targets for better iOS touch experience */
+.ios-device button, 
+.ios-device .song-card,
+.ios-device .control-button,
+.ios-device #play-pause {
+    touch-action: manipulation;
+    -webkit-tap-highlight-color: rgba(0,0,0,0); /* Remove tap highlight */
+}
+
+/* Class for scrollable containers on iOS */
+.ios-scrollable {
+    -webkit-overflow-scrolling: touch !important;
+    overflow-y: auto !important;
+    position: relative;
+    z-index: 1;
+    /* Prevent content from being hidden under the player */
+    padding-bottom: 100px;
+}
+
+/* Improve song selection on iOS */
+.ios-device {
+    /* Prevent page bounce effects */
+    overscroll-behavior: none;
+}
+
+/* Override any momentum scrolling issues */
+.ios-device .view-container {
+    height: auto;
+    overflow-y: auto;
+    -webkit-overflow-scrolling: touch;
+    /* Prevent content from disappearing under the player */
+    padding-bottom: 100px;
+}
+
+/* Make clickable elements more reliable on iOS */
+.ios-device .song-card {
+    position: relative;
+    z-index: 5;
+    cursor: pointer;
+    -webkit-tap-highlight-color: rgba(0,0,0,0);
+}
+
+/* Fix case where scroll gets stuck */
+.ios-device .main-content-header {
+    position: fixed;
+    top: 0;
+    left: 240px;
+    right: 0;
+    z-index: 100; 
+    background-color: #121212;
+    padding: 16px 20px;
+    transform: translateZ(0);
+}
+
+@media (max-width: 768px) {
+    .ios-device .main-content-header {
+        left: 0;
+        padding-top: calc(16px + env(safe-area-inset-top));
+    }
+}
+
+/* Fix core iOS scrolling issues */
+
+/* Make home view scrollable directly for iOS */
+.ios-device #home-view {
+    overflow-y: auto !important;
+    -webkit-overflow-scrolling: touch !important;
+    height: auto !important;
+    position: relative !important;
+    z-index: 1;
+}
+
+/* Keep player fixed but ensure it doesn't break scrolling */
+.ios-device .player {
+    position: fixed !important;
+    bottom: 0 !important;
+    left: 0 !important;
+    right: 0 !important;
+    z-index: 1000 !important;
+    padding-bottom: calc(var(--sab, 0px) + 8px) !important;
+    background-color: #181818;
+    height: auto !important;
+    transform: translateZ(0);
+    display: flex !important;
+    flex-direction: column;
+    min-height: 90px;
+}
+
+/* Make sure the container structure allows scrolling */
+.ios-device .container {
+    position: absolute !important;
+    top: 0 !important;
+    left: 0 !important;
+    right: 0 !important;
+    bottom: 0 !important;
+    height: 100% !important;
+    overflow: hidden !important;
+}
+
+.ios-device .main-content {
+    position: relative !important;
+    flex: 1 !important;
+    overflow: hidden !important; 
+    padding-bottom: 90px !important;
+    height: 100% !important;
+}
+
+.ios-device .view-container {
+    position: relative !important;
+    overflow-y: auto !important;
+    -webkit-overflow-scrolling: touch !important;
+    height: 100% !important;
+    padding-bottom: 150px !important; /* Extra space to ensure content is visible */
+}
+
+/* Simplify the song containers */
+.ios-device .songs-container {
+    height: auto !important;
+    overflow: visible !important;
+    position: relative !important;
+    padding-bottom: 140px !important;
 } 

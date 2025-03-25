@@ -110,9 +110,17 @@ function initializeAuthUI() {
  * Detect iOS devices and apply iOS-specific styling
  */
 function detectIOSDevice() {
+    // More thorough iOS detection, specifically focusing on Safari
     const isIOS = /iPad|iPhone|iPod/.test(navigator.userAgent) && !window.MSStream;
+    const isSafari = isIOS && /AppleWebKit/.test(navigator.userAgent) && 
+                    !/CriOS/.test(navigator.userAgent) && !/FxiOS/.test(navigator.userAgent);
+    
     if (isIOS) {
+        // Add appropriate classes
         document.documentElement.classList.add('ios-device');
+        if (isSafari) {
+            document.documentElement.classList.add('ios-safari');
+        }
         
         // Set viewport height variables
         setViewportHeight();
@@ -121,13 +129,19 @@ function detectIOSDevice() {
         window.addEventListener('resize', handleIOSViewportChanges);
         window.addEventListener('orientationchange', () => {
             // Delay to make sure the browser has finished painting
-            setTimeout(handleIOSViewportChanges, 300);
+            setTimeout(() => {
+                handleIOSViewportChanges();
+                
+                // Fix scrolling after orientation change
+                setTimeout(fixIOSScrollContainers, 300);
+            }, 300);
         });
         
-        // Add event listener for when the page is shown (helps with iOS toolbar changes)
+        // Handle page visibility changes
         document.addEventListener('visibilitychange', () => {
             if (document.visibilityState === 'visible') {
-                setTimeout(handleIOSViewportChanges, 300);
+                setTimeout(handleIOSViewportChanges, 100);
+                setTimeout(fixIOSScrollContainers, 300);
             }
         });
         
@@ -139,9 +153,35 @@ function detectIOSDevice() {
         }
         
         // Initial check to ensure player visibility
-        setTimeout(ensureIOSPlayerVisibility, 500);
+        setTimeout(ensureIOSPlayerVisibility, 300);
         
-        console.log('iOS device detected - applying iOS-specific styles');
+        // Fix scrolling in iOS by adding classes to scrollable containers
+        document.querySelectorAll('.view-container, #home-view, .songs-container').forEach(container => {
+            container.classList.add('ios-scrollable');
+            if (container.id === 'home-view') {
+                // Make home view the primary scroll container
+                container.style.overflowY = 'auto';
+                container.style.webkitOverflowScrolling = 'touch';
+            }
+        });
+        
+        // Fix initial scroll position
+        setTimeout(fixIOSScrollContainers, 500);
+        
+        // Add event listener for iOS-specific clicks on song cards to ensure scrolling is preserved
+        document.addEventListener('click', (e) => {
+            const songCard = e.target.closest('.song-card');
+            if (songCard) {
+                // Save scroll position for active view
+                const activeView = document.querySelector('.view-container.active') || document.getElementById('home-view');
+                if (activeView) {
+                    window._lastIOSScrollPos = activeView.scrollTop;
+                    console.log('Saved iOS scroll position on song click:', window._lastIOSScrollPos);
+                }
+            }
+        }, { passive: true });
+        
+        console.log(`iOS ${isSafari ? 'Safari' : 'browser'} detected - applying iOS-specific styles`);
     }
     return isIOS;
 }
@@ -155,6 +195,38 @@ function handleIOSViewportChanges() {
     
     // Ensure player visibility
     ensureIOSPlayerVisibility();
+    
+    // Fix scroll containers after viewport changes
+    fixIOSScrollContainers();
+}
+
+/**
+ * Fix scrolling containers after iOS viewport changes
+ */
+function fixIOSScrollContainers() {
+    // Force redraw on scrollable containers
+    document.querySelectorAll('.view-container.active, #home-view, .ios-scrollable').forEach(container => {
+        if (!container) return;
+        
+        // Store current scroll position
+        const currentScroll = container.scrollTop || 0;
+        
+        // Force a repaint by changing a style property temporarily
+        container.style.display = 'none';
+        void container.offsetHeight; // Force repaint
+        container.style.display = '';
+        
+        // Restore scroll position
+        if (currentScroll > 0) {
+            setTimeout(() => {
+                container.scrollTop = currentScroll;
+                console.log(`Restored scroll position for ${container.id || container.className}: ${currentScroll}px`);
+            }, 50);
+        }
+    });
+    
+    // Also ensure player remains visible
+    ensureIOSPlayerVisibility();
 }
 
 /**
@@ -167,12 +239,18 @@ function ensureIOSPlayerVisibility() {
         player.style.display = 'flex';
         player.style.visibility = 'visible';
         player.style.opacity = '1';
+        player.style.transform = 'translateZ(0)';
+        
+        // Add a specific class to indicate it's been fixed
+        if (!player.classList.contains('ios-fixed')) {
+            player.classList.add('ios-fixed');
+        }
         
         // Log for debugging
         console.log('Ensuring iOS player visibility in ' + 
-                     (window.matchMedia('(orientation: portrait)').matches ? 'portrait' : 'landscape') + 
-                     ' orientation');
-                     
+                    (window.matchMedia('(orientation: portrait)').matches ? 'portrait' : 'landscape') + 
+                    ' orientation');
+        
         // Force reflow/repaint
         void player.offsetHeight;
     } else {

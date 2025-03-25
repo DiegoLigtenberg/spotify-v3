@@ -937,6 +937,7 @@ class MusicPlayer {
             // Save the current scroll position before playing the song
             const scrollingElement = this.getCurrentScrollingElement();
             const currentScrollTop = scrollingElement ? scrollingElement.scrollTop : 0;
+            console.log('Saved scroll position:', currentScrollTop);
             
             // Cancel any previous pending requests
             if (this.currentAbortController) {
@@ -1085,9 +1086,17 @@ class MusicPlayer {
             
             // Restore the scroll position in case it changed
             if (scrollingElement) {
-                requestAnimationFrame(() => {
+                // Use a more robust approach to restore scrolling
+                const restoreScroll = () => {
                     scrollingElement.scrollTop = currentScrollTop;
-                });
+                    console.log('Restored scroll position to:', currentScrollTop);
+                };
+                
+                // Try multiple times to ensure scroll position is restored
+                restoreScroll();
+                setTimeout(restoreScroll, 50);
+                setTimeout(restoreScroll, 150);
+                requestAnimationFrame(restoreScroll);
             }
         } catch (error) {
             console.error('Error playing song:', error);
@@ -1694,42 +1703,41 @@ class MusicPlayer {
         }
     }
 
+    // Function to get the correct scrolling element for current view
     getCurrentScrollingElement() {
-        // Return the active scrolling container
+        // For iOS, we need to be more careful about identifying the correct scrolling container
+        const isIOS = /iPad|iPhone|iPod/.test(navigator.userAgent) && !window.MSStream;
+        
+        if (isIOS) {
+            // For iOS, focus on finding the active view container first
+            const activeView = document.querySelector('.view-container.active');
+            if (activeView) {
+                // In iOS, the view-container itself is the scrolling element
+                return activeView;
+            }
+            
+            // If no active view, fall back to the home view
+            const homeView = document.getElementById('home-view');
+            if (homeView) {
+                return homeView;
+            }
+        }
+        
+        // Non-iOS browsers: use the original logic
         const activeContainer = document.querySelector('.songs-container.active');
         if (activeContainer) {
             return activeContainer;
         }
+        
         // Fallback to the current view 
         const activeView = document.querySelector('.view-container.active');
         if (activeView) {
             const container = activeView.querySelector('.songs-container');
             if (container) return container;
         }
+        
         // Final fallback to the first songs container
         return document.querySelector('.songs-container');
-    }
-
-    /**
-     * Get all song cards that are currently visible in the viewport
-     * @param {Element} container - The scrollable container
-     * @returns {Array} - Array of visible song card elements
-     * @private
-     */
-    _getVisibleSongCards(container) {
-        const allCards = Array.from(container.querySelectorAll('.song-card'));
-        if (!allCards.length) return [];
-        
-        const scrollTop = container.scrollTop;
-        const scrollBottom = scrollTop + container.clientHeight;
-        
-        return allCards.filter(card => {
-            const cardTop = card.offsetTop;
-            const cardBottom = cardTop + card.offsetHeight;
-            
-            // Card is visible if part of it is in the viewport
-            return (cardBottom > scrollTop && cardTop < scrollBottom);
-        });
     }
 
     // Add a method to load top tags for the dropdown
@@ -1981,4 +1989,61 @@ function init() {
     // Initialize the UI
     initUI();
     // ... existing code ...
-} 
+}
+
+// Fix iOS scroll issues when navigating between songs
+function fixIOSScrolling() {
+    const isIOS = /iPad|iPhone|iPod/.test(navigator.userAgent) && !window.MSStream;
+    if (!isIOS) return;
+    
+    console.log('Setting up iOS scroll fixes');
+    
+    // Improve view container scrolling for iOS
+    document.querySelectorAll('.view-container').forEach(view => {
+        if (!view._iosScrollHandled) {
+            view._iosScrollHandled = true;
+            
+            // Ensure scroll events bubble correctly
+            view.addEventListener('scroll', (e) => {
+                // Prevent scroll event jitters on iOS
+                e.stopPropagation();
+            }, { passive: true });
+        }
+    });
+    
+    // Fix song click handler to preserve scrolling on iOS
+    document.addEventListener('click', function(e) {
+        const songCard = e.target.closest('.song-card');
+        if (songCard) {
+            // Save scroll position
+            const scrollContainer = getCurrentScrollingElement();
+            const savedScroll = scrollContainer ? scrollContainer.scrollTop : 0;
+            
+            // Store the saved scroll value in a data attribute for recovery
+            if (scrollContainer) {
+                scrollContainer.dataset.savedScrollPos = savedScroll;
+                console.log('Saved iOS scroll position:', savedScroll);
+            }
+        }
+    }, { passive: false });
+    
+    // Fix orientation changes
+    window.addEventListener('orientationchange', function() {
+        // Restore scroll position after orientation change
+        setTimeout(() => {
+            const scrollContainer = getCurrentScrollingElement();
+            if (scrollContainer && scrollContainer.dataset.savedScrollPos) {
+                const savedPos = parseInt(scrollContainer.dataset.savedScrollPos);
+                scrollContainer.scrollTop = savedPos;
+                console.log('Restored scroll after orientation change:', savedPos);
+            }
+        }, 300);
+    });
+}
+
+// Ensure the function runs during initialization
+// Call this early to set up proper scroll handling
+fixIOSScrolling();
+
+// Replace the getCurrentScrollingElement method with the improved version
+getCurrentScrollingElement = getCurrentScrollingElement; 
