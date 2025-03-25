@@ -1944,8 +1944,33 @@ function detectIOSDevice() {
     if (isIOS) {
         document.documentElement.classList.add('ios-device');
         console.log('iOS device detected, applying iOS-specific styles');
+        
+        // Ensure player visibility on orientation changes and screen resize
+        window.addEventListener('orientationchange', ensurePlayerVisibility);
+        window.addEventListener('resize', ensurePlayerVisibility);
+        
+        // Initial check
+        setTimeout(ensurePlayerVisibility, 300);
     }
     return isIOS;
+}
+
+// Function to ensure player visibility on iOS
+function ensurePlayerVisibility() {
+    const player = document.querySelector('.player');
+    if (player) {
+        // Force repaint of the player
+        player.style.display = 'flex';
+        player.style.visibility = 'visible';
+        player.style.opacity = '1';
+        
+        // Log current state for debugging
+        console.log('Ensuring player visibility, orientation:', window.orientation, 
+                    'player display:', getComputedStyle(player).display);
+        
+        // Force browser recalculation
+        void player.offsetHeight;
+    }
 }
 
 // Initialize view and event handlers

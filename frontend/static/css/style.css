@@ -2464,10 +2464,89 @@ nav ul li a.active {
     bottom: var(--sab, 0px);
     left: 0;
     width: 100%;
+    height: auto; /* Allow height to adjust based on content */
+    min-height: 90px; /* Ensure minimum height for controls visibility */
     z-index: 1000;
     background-color: #181818;
     padding-bottom: env(safe-area-inset-bottom);
     box-shadow: 0 -2px 10px rgba(0, 0, 0, 0.3);
+    display: flex !important; /* Force display */
+    flex-direction: column;
+    justify-content: space-between;
+    visibility: visible !important; /* Ensure visibility */
+    opacity: 1 !important; /* Ensure opacity */
+    transform: translateY(0) !important; /* Prevent transforms hiding it */
+}
+
+/* iOS player layout in portrait mode */
+.ios-device .now-playing {
+    display: flex;
+    align-items: center;
+    padding: 8px 16px;
+    width: 100%;
+}
+
+.ios-device .controls {
+    padding: 4px 16px 8px;
+    width: 100%;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+}
+
+.ios-device .playback-controls {
+    display: flex;
+    justify-content: center;
+    margin-bottom: 4px;
+    width: 100%;
+}
+
+.ios-device .progress-container {
+    width: 100%;
+    display: flex;
+    align-items: center;
+    padding: 0 4px;
+}
+
+/* Override any media queries that might hide player in portrait mode */
+@media (orientation: portrait) {
+    .ios-device .player {
+        display: flex !important;
+        visibility: visible !important;
+        height: auto;
+        min-height: 90px;
+    }
+    
+    .ios-device .now-playing {
+        flex: 0 0 auto;
+    }
+    
+    .ios-device .controls {
+        flex: 1 0 auto;
+    }
+    
+    /* Hide volume in portrait to save space */
+    .ios-device .volume-control {
+        display: none;
+    }
+}
+
+/* Adjust for smaller screens */
+@media (max-width: 480px) {
+    .ios-device .player {
+        padding: 4px 8px;
+        min-height: 80px;
+    }
+    
+    .ios-device .now-playing img {
+        width: 48px;
+        height: 48px;
+    }
+    
+    .ios-device .control-button, 
+    .ios-device #play-pause {
+        margin: 0 8px;
+    }
 }
 
 /* Enhanced player styling for iOS */

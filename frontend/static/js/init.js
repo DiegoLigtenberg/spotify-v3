@@ -118,16 +118,16 @@ function detectIOSDevice() {
         setViewportHeight();
         
         // Add event listeners to handle orientation changes and resize events
-        window.addEventListener('resize', setViewportHeight);
+        window.addEventListener('resize', handleIOSViewportChanges);
         window.addEventListener('orientationchange', () => {
             // Delay to make sure the browser has finished painting
-            setTimeout(setViewportHeight, 200);
+            setTimeout(handleIOSViewportChanges, 300);
         });
         
         // Add event listener for when the page is shown (helps with iOS toolbar changes)
         document.addEventListener('visibilitychange', () => {
             if (document.visibilityState === 'visible') {
-                setTimeout(setViewportHeight, 300);
+                setTimeout(handleIOSViewportChanges, 300);
             }
         });
         
@@ -138,9 +138,46 @@ function detectIOSDevice() {
                 'width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover');
         }
         
+        // Initial check to ensure player visibility
+        setTimeout(ensureIOSPlayerVisibility, 500);
+        
         console.log('iOS device detected - applying iOS-specific styles');
     }
     return isIOS;
+}
+
+/**
+ * Handle iOS viewport changes (called on resize, orientation change)
+ */
+function handleIOSViewportChanges() {
+    // Update viewport height
+    setViewportHeight();
+    
+    // Ensure player visibility
+    ensureIOSPlayerVisibility();
+}
+
+/**
+ * Ensure the player is visible on iOS devices
+ */
+function ensureIOSPlayerVisibility() {
+    const player = document.querySelector('.player');
+    if (player) {
+        // Force player display properties
+        player.style.display = 'flex';
+        player.style.visibility = 'visible';
+        player.style.opacity = '1';
+        
+        // Log for debugging
+        console.log('Ensuring iOS player visibility in ' + 
+                     (window.matchMedia('(orientation: portrait)').matches ? 'portrait' : 'landscape') + 
+                     ' orientation');
+                     
+        // Force reflow/repaint
+        void player.offsetHeight;
+    } else {
+        console.warn('Player element not found when ensuring visibility');
+    }
 }
 
 /**
