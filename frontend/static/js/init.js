@@ -107,11 +107,47 @@ function initializeAuthUI() {
 }
 
 /**
+ * Detect iOS devices and apply iOS-specific styling
+ */
+function detectIOSDevice() {
+    const isIOS = /iPad|iPhone|iPod/.test(navigator.userAgent) && !window.MSStream;
+    if (isIOS) {
+        document.documentElement.classList.add('ios-device');
+        
+        // Set viewport height variables
+        setViewportHeight();
+        
+        // Add event listeners to handle orientation changes and resize events
+        window.addEventListener('resize', setViewportHeight);
+        window.addEventListener('orientationchange', () => {
+            // Delay to make sure the browser has finished painting
+            setTimeout(setViewportHeight, 200);
+        });
+        
+        console.log('iOS device detected - applying iOS-specific styles');
+    }
+    return isIOS;
+}
+
+/**
+ * Set viewport height CSS variable to handle iOS Safari issues
+ */
+function setViewportHeight() {
+    // Set viewport height CSS variable (to handle iOS Safari issues)
+    const vh = window.innerHeight * 0.01;
+    document.documentElement.style.setProperty('--vh', `${vh}px`);
+    console.log(`Viewport height set: ${window.innerHeight}px, 1vh = ${vh}px`);
+}
+
+/**
  * Initialize the application
  */
 function initializeApp() {
     // Load environment variables
     loadEnvironmentVariables();
+    
+    // Detect iOS device and apply iOS-specific styling
+    detectIOSDevice();
     
     // Initialize main app first
     initializeMainApp();

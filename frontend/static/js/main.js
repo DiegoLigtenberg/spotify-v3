@@ -1900,11 +1900,28 @@ function setViewportHeight() {
     // For iOS Safari, also account for safe areas
     if (window.CSS && CSS.supports('-webkit-touch-callout', 'none')) {
         console.log('Setting up iOS viewport adjustments');
-        // Add delay to ensure proper iOS rotation handling
+        
+        // Add an additional delay to account for iOS toolbar
         setTimeout(() => {
+            // Recalculate dimensions after a delay to handle iOS toolbar
             vh = window.innerHeight * 0.01;
             document.documentElement.style.setProperty('--vh', `${vh}px`);
-        }, 100);
+            
+            // Get the actual safe area inset bottom
+            const safeAreaInsetBottom = Number(getComputedStyle(document.documentElement).getPropertyValue('--sat').replace('px', '')) || 0;
+            
+            // Log information for debugging
+            console.log(`iOS viewport: ${window.innerHeight}px, Safe area inset: ${safeAreaInsetBottom}px`);
+            
+            // Additional fix for Safari toolbar
+            const totalHeight = window.innerHeight;
+            document.body.style.height = `${totalHeight}px`;
+        }, 300);
+        
+        // Also handle orientation changes and resize events specifically
+        window.addEventListener('orientationchange', () => {
+            setTimeout(setViewportHeight, 500);
+        });
     }
 }
 
@@ -1919,4 +1936,24 @@ window.getAuthToken = getAuthToken;
 window.authFetch = authFetch;
 
 // Start initialization only once
-initApp(); 
+initApp();
+
+// Function to detect iOS devices
+function detectIOSDevice() {
+    const isIOS = /iPad|iPhone|iPod/.test(navigator.userAgent) && !window.MSStream;
+    if (isIOS) {
+        document.documentElement.classList.add('ios-device');
+        console.log('iOS device detected, applying iOS-specific styles');
+    }
+    return isIOS;
+}
+
+// Initialize view and event handlers
+function init() {
+    // Detect iOS device
+    const isIOS = detectIOSDevice();
+    
+    // Initialize the UI
+    initUI();
+    // ... existing code ...
+} 

@@ -249,6 +249,41 @@ nav ul li a.active {
     align-items: center;
 }
 
+/* Additional iOS-specific player styles */
+@supports (-webkit-touch-callout: none) {
+    .player {
+        box-shadow: 0 -4px 6px rgba(0, 0, 0, 0.1); /* Add subtle shadow */
+        padding: 16px 32px 16px 32px; /* Better padding for iOS */
+    }
+    
+    /* Fix for player controls on iOS */
+    .playback-controls {
+        justify-content: center;
+    }
+    
+    /* Fix for now playing section on iOS */
+    .now-playing {
+        padding-bottom: 0;
+    }
+    
+    /* Ensure album art display correctly */
+    #current-thumbnail {
+        object-fit: cover;
+        border-radius: 4px;
+    }
+    
+    /* Ensure progress bar works correctly */
+    .progress-container {
+        touch-action: none; /* Improve touch handling */
+    }
+    
+    /* Fix scrolling of main content */
+    .songs-container {
+        -webkit-overflow-scrolling: touch;
+        overscroll-behavior: contain;
+    }
+}
+
 .now-playing {
     display: flex;
     align-items: center;
@@ -2300,6 +2335,7 @@ nav ul li a.active {
         height: calc(var(--vh, 1vh) * 100);
         max-height: -webkit-fill-available; /* Fix for iOS height issues */
         overflow: hidden;
+        padding-bottom: env(safe-area-inset-bottom, 0px); /* Add safe area inset for iOS */
     }
     
     .sidebar {
@@ -2307,8 +2343,7 @@ nav ul li a.active {
         overflow-y: auto;
         -webkit-overflow-scrolling: touch;
         height: 100%;
-        max-height: calc(100vh - 90px);
-        max-height: calc(calc(var(--vh, 1vh) * 100) - 90px);
+        max-height: calc(100vh - 90px - env(safe-area-inset-bottom, 0px));
     }
 
     .main-content {
@@ -2317,8 +2352,7 @@ nav ul li a.active {
         flex-direction: column;
         overflow: hidden;
         position: relative;
-        max-height: calc(100vh - 90px);
-        max-height: calc(calc(var(--vh, 1vh) * 100) - 90px);
+        max-height: calc(100vh - 90px - env(safe-area-inset-bottom, 0px));
     }
 
     /* Create a fixed header for search and tags */
@@ -2340,19 +2374,19 @@ nav ul li a.active {
         flex: 1;
         overflow-y: auto;
         -webkit-overflow-scrolling: touch;
-        padding-bottom: 24px;
+        padding-bottom: 90px; /* Add padding to account for the player */
     }
 
-    /* Make player fixed at bottom */
+    /* Make player fixed at bottom - above Safari UI */
     .player {
         position: fixed;
-        bottom: 0;
         left: 0;
+        right: 0;
+        bottom: env(safe-area-inset-bottom, 0px);
         width: 100%;
         z-index: 100;
         height: 90px;
         background-color: #181818;
-        padding-bottom: max(16px, env(safe-area-inset-bottom, 16px));
     }
     
     /* Add iOS safe area insets for notches, etc. */
@@ -2360,10 +2394,10 @@ nav ul li a.active {
         padding-bottom: env(safe-area-inset-bottom, 0px);
     }
     
-    /* Fix for iPhone X and newer with home indicator */
+    /* Specific fix for iPhone with home indicator */
     @supports (padding-bottom: env(safe-area-inset-bottom)) {
-        .player {
-            height: calc(90px + env(safe-area-inset-bottom, 0px));
+        .view-container {
+            padding-bottom: calc(90px + env(safe-area-inset-bottom, 0px));
         }
     }
     
@@ -2384,4 +2418,58 @@ nav ul li a.active {
 /* When both search bar and tags dropdown are present */
 .search-bar + .tags-dropdown {
     margin-top: 8px;
+}
+
+/* iOS-specific styles */
+.ios-device {
+    /* Prevent overscroll bouncing */
+    position: fixed;
+    overflow: hidden;
+    width: 100%;
+    height: 100%;
+}
+
+.ios-device .container {
+    /* Use the viewport height CSS variable */
+    height: calc(var(--vh, 1vh) * 100);
+    /* Enable scrolling within the container */
+    overflow-y: auto;
+    /* Add iOS scroll behavior */
+    -webkit-overflow-scrolling: touch;
+}
+
+.ios-device .main-content {
+    /* Keep the main content scrollable */
+    overflow-y: auto;
+    /* Set padding to account for fixed elements */
+    padding-top: 80px; /* Height of search/filter area */
+    padding-bottom: calc(90px + var(--sab, 0px)); /* Height of player + safe area */
+}
+
+.ios-device .main-content-header {
+    /* Fix the search/filter area at the top */
+    position: fixed;
+    top: 0;
+    left: 240px; /* sidebar width */
+    right: 0;
+    z-index: 100;
+    background-color: #121212;
+    padding: 20px;
+    border-bottom: 1px solid #282828;
+}
+
+.ios-device .player {
+    /* Fix player to bottom, accounting for safe area inset */
+    position: fixed;
+    bottom: var(--sab, 0px);
+    left: 0;
+    width: 100%;
+    z-index: 1000;
+}
+
+/* Mobile optimizations */
+@media (max-width: 768px) {
+    .ios-device .main-content-header {
+        left: 0;
+    }
 } 
