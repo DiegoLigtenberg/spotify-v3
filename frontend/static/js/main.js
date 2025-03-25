@@ -1631,11 +1631,6 @@ class MusicPlayer {
         
         // Pre-buffer the audio to help avoid loading delays
         this.audio.preload = 'auto';
-
-        // Setup player toggle for iOS
-        if (this.isIOSSafari) {
-            this.setupPlayerToggle();
-        }
     }
 
     /**
@@ -1774,6 +1769,91 @@ class MusicPlayer {
             console.error('Error loading top tags:', error);
         }
     }
+
+    // Add a method to set up iOS-specific audio handling
+    _setupIOSAudioHandling() {
+        console.log('Setting up iOS Safari audio handling with seamless approach');
+        
+        // Create a context unlock function that will be called on first user interaction
+        const unlockAudio = () => {
+            // Use a silent audio context approach
+            if (typeof AudioContext !== 'undefined' || typeof webkitAudioContext !== 'undefined') {
+                const AudioContextClass = window.AudioContext || window.webkitAudioContext;
+                const audioContext = new AudioContextClass();
+                
+                // Create a short silent buffer
+                const buffer = audioContext.createBuffer(1, 1, 22050);
+                const source = audioContext.createBufferSource();
+                source.buffer = buffer;
+                source.connect(audioContext.destination);
+                
+                // Play the buffer
+                if (typeof source.start === 'undefined') {
+                    source.noteOn(0);
+                } else {
+                    source.start(0);
+                }
+                
+                // Resume the audio context if needed
+                if (audioContext.state === 'suspended') {
+                    audioContext.resume();
+                }
+                
+                console.log('Audio context unlocked via user interaction');
+            }
+            
+            // Also create and play a silent HTML5 audio element
+            const silentAudio = document.createElement('audio');
+            silentAudio.controls = false;
+            silentAudio.preload = 'auto';
+            silentAudio.loop = false;
+            silentAudio.volume = 0.01; // Very low but not zero (zero can fail on iOS)
+            silentAudio.src = 'data:audio/mp3;base64,SUQzBAAAAAABEVRYWFgAAAAtAAADY29tbWVudABCaWdTb3VuZEJhbmsuY29tIC8gTGFTb25vdGhlcXVlLm9yZwBURU5DAAAAHQAAA1N3aXRjaCBQbHVzIMKpIE5DSCBTb2Z0d2FyZQBUSVQyAAAABgAAAzIyMzUAVFNTRQAAAA8AAANMYXZmNTcuODMuMTAwAAAAAAAAAAAAAAD/80DEAAAAA0gAAAAATEFNRTMuMTAwVVVVVVVVVVVVVUxBTUUzLjEwMFVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVf/zQsRbAAADSAAAAABVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVf/zQMSkAAADSAAAAABVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVV';
+            document.body.appendChild(silentAudio);
+            
+            // Attempt to play the silent audio
+            const playPromise = silentAudio.play();
+            if (playPromise !== undefined) {
+                playPromise.then(() => {
+                    console.log('Silent audio played successfully');
+                    // Wait a moment then remove the element
+                    setTimeout(() => {
+                        if (document.body.contains(silentAudio)) {
+                            document.body.removeChild(silentAudio);
+                        }
+                    }, 1000);
+                    
+                    // Also initialize our main audio player
+                    this.audio.load();
+                }).catch(error => {
+                    console.error('Silent audio play failed:', error);
+                    // Don't remove it - we'll try again on next interaction
+                });
+            }
+            
+            // Also modify the main audio element to be more iOS friendly
+            this.audio.preload = 'auto';  
+            this.audio.autoplay = false; // Never autoplay on iOS
+            this.audio.load(); // Force load
+        };
+        
+        // Listen for ANY user interaction to unlock audio
+        const events = ['touchstart', 'touchend', 'mousedown', 'keydown', 'click'];
+        const unlockOnce = () => {
+            unlockAudio();
+            // Remove all listeners after first interaction
+            events.forEach(event => {
+                document.removeEventListener(event, unlockOnce);
+            });
+        };
+        
+        // Add all event listeners
+        events.forEach(event => {
+            document.addEventListener(event, unlockOnce, { once: true });
+        });
+        
+        console.log('iOS audio handlers set up - waiting for user interaction');
+    }
 }
 
 // Main initialization function
@@ -1868,31 +1948,6 @@ function detectIOSDevice() {
     return isIOS;
 }
 
-// Global function to setup player toggle for iOS
-function setupPlayerToggle() {
-    const playerToggle = document.querySelector('.player-toggle');
-    const player = document.querySelector('.player');
-    const mainContent = document.querySelector('.main-content');
-    
-    if (playerToggle && player && mainContent) {
-        playerToggle.addEventListener('click', () => {
-            player.classList.toggle('collapsed');
-            mainContent.classList.toggle('player-collapsed');
-            
-            // Store preference in localStorage
-            const isCollapsed = player.classList.contains('collapsed');
-            localStorage.setItem('player-collapsed', isCollapsed ? 'true' : 'false');
-        });
-        
-        // Check stored preference
-        const storedPreference = localStorage.getItem('player-collapsed');
-        if (storedPreference === 'true') {
-            player.classList.add('collapsed');
-            mainContent.classList.add('player-collapsed');
-        }
-    }
-}
-
 // Initialize view and event handlers
 function init() {
     // Detect iOS device
@@ -1900,9 +1955,5 @@ function init() {
     
     // Initialize the UI
     initUI();
-    
-    // Setup player toggle for iOS
-    if (isIOS) {
-        setupPlayerToggle();
-    }
+    // ... existing code ...
 } 
